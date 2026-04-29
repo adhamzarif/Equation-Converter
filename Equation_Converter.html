@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f8f8f7; --bg3: #f1efe8;
+    --text: #1a1a18; --text2: #5f5e5a; --text3: #888780;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --radius: 8px; --radius-lg: 12px;
+    --blue: #185FA5; --teal: #0F6E56; --amber: #854F0B;
+    --purple: #534AB7; --red: #A32D2D; --gray: #5F5E5A;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg2); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 16px; font-weight: 500; }
+  header span { font-size: 12px; color: var(--text3); }
+  .badge { font-size: 10px; background: #e8f5e9; color: #2e7d32; border-radius: 4px; padding: 2px 6px; margin-left: 4px; }
+  .main { display: grid; grid-template-columns: 1fr 1fr; flex: 1; height: calc(100vh - 93px); }
+  .pane { display: flex; flex-direction: column; overflow: hidden; }
+  .pane-header { padding: 10px 16px; border-bottom: 0.5px solid var(--border); background: var(--bg); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .pane-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); font-weight: 500; }
+  .pane-actions { display: flex; gap: 6px; }
+  .btn { padding: 5px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 12px; cursor: pointer; background: var(--bg); color: var(--text); font-weight: 500; white-space: nowrap; }
+  .btn:hover { background: var(--bg2); }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { opacity: .85; background: var(--text); }
+  textarea { flex: 1; resize: none; border: none; outline: none; padding: 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.65; background: var(--bg); color: var(--text); border-right: 0.5px solid var(--border); }
+  .preview-pane { flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--bg); }
+  .preview-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text3); font-size: 13px; }
+  .sec-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; padding-left: 10px; margin: 1.4rem 0 .5rem; line-height: 1.4; border-left-width: 3px; border-left-style: solid; }
+  .eq-display { text-align: center; margin: .8rem 0; overflow-x: auto; padding: 4px 0; }
+  .plain-line { font-size: 14px; line-height: 1.75; margin: .2rem 0; }
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 1rem 0; }
+  .title-row { padding: 8px 16px; border-bottom: 0.5px solid var(--border); background: var(--bg2); display: flex; align-items: center; gap: 8px; }
+  .title-row label { font-size: 12px; color: var(--text3); white-space: nowrap; }
+  .title-row input { flex: 1; border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 5px 10px; font-size: 13px; background: var(--bg); color: var(--text); outline: none; }
+  .title-row input:focus { border-color: var(--blue); }
+  .export-bar { padding: 10px 16px; border-top: 0.5px solid var(--border); background: var(--bg2); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 11px; color: var(--text3); margin-left: auto; }
+  @media print {
+    header, .pane:first-child, .pane-header, .title-row, .export-bar { display: none !important; }
+    .main { display: block; height: auto; }
+    .preview-pane { padding: 0; overflow: visible; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.2"/>
+    <path d="M6 7h8M6 10h5M6 13h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+  </svg>
+  <span>Paste → Preview → Export to .docx / PDF / HTML <span class="badge">✓ Equations editable in Word</span></span>
+</header>
+
+<div class="title-row">
+  <label>Document title:</label>
+  <input type="text" id="docTitle" value="Signal Analysis" placeholder="e.g. Fourier Series — Problem Set 3">
+</div>
+
+<div class="main">
+  <!-- LEFT: input pane -->
+  <div class="pane">
+    <div class="pane-header">
+      <span class="pane-label">Input</span>
+      <div class="pane-actions">
+        <button class="btn" onclick="loadExample()">Load example</button>
+        <button class="btn" onclick="clearAll()">Clear</button>
+        <button class="btn btn-primary" onclick="renderPreview()">Preview ↵</button>
+      </div>
+    </div>
+    <textarea id="input" placeholder="Paste your reply here…
+
+Format:
+*Section Name*
+[equation on one or multiple lines]
+--- (divider)
+plain text lines
+**bold**, *italic* inline"></textarea>
+  </div>
+
+  <!-- RIGHT: preview pane -->
+  <div class="pane">
+    <div class="pane-header">
+      <span class="pane-label">Preview</span>
+      <div class="pane-actions">
+        <button class="btn" onclick="exportHTML()" title="Download HTML">HTML</button>
+        <button class="btn" onclick="exportDOCX()" title="Download editable .docx">DOCX</button>
+        <button class="btn" onclick="exportPDF()" title="Save as PDF via print">PDF</button>
+      </div>
+    </div>
+    <div class="preview-pane" id="preview">
+      <div class="preview-empty">Paste your reply and click Preview</div>
+    </div>
+    <div class="export-bar">
+      <button class="btn btn-primary" onclick="exportDOCX()">⬇ Download .docx</button>
+      <button class="btn" onclick="exportHTML()">⬇ HTML (Word-ready)</button>
+      <button class="btn" onclick="exportPDF()">🖨 Save as PDF</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXAMPLE = `*Question*
+Draw magnitude and phase plots of (c_k).
+
+---
+
+*Given*
+[
+c_0=1,\\quad
+c_{\\pm1}=\\frac{1}{2}\\mp j,\\quad
+c_{\\pm2}=-\\frac{1}{4}\\mp j\\frac{\\sqrt{3}}{4}
+]
+
+---
+
+*Formulas*
+[
+|c_k|=\\sqrt{(\\Re c_k)^2+(\\Im c_k)^2}
+]
+[
+\\angle c_k=\\tan^{-1}\\!\\left(\\frac{\\Im c_k}{\\Re c_k}\\right)
+]
+
+---
+
+*Solution*
+
+[
+|c_0|=1,\\quad \\angle c_0=0
+]
+
+[
+|c_1|=\\sqrt{\\left(\\frac{1}{2}\\right)^2+(-1)^2}
+=\\sqrt{\\frac{1}{4}+1}
+=\\frac{\\sqrt{5}}{2}
+]
+
+[
+\\angle c_1=\\tan^{-1}\\!\\left(\\frac{-1}{1/2}\\right)
+=-\\tan^{-1}(2)
+]
+
+[
+|c_{-1}|=\\frac{\\sqrt{5}}{2},\\quad
+\\angle c_{-1}=\\tan^{-1}(2)
+]
+
+[
+|c_2|=\\sqrt{\\left(\\frac{1}{4}\\right)^2+\\left(\\frac{\\sqrt{3}}{4}\\right)^2}
+=\\sqrt{\\frac{1}{16}+\\frac{3}{16}}
+=\\frac{1}{2}
+]
+
+[
+\\angle c_2=\\tan^{-1}\\!\\left(\\frac{-\\sqrt{3}/4}{-1/4}\\right)
+=\\tan^{-1}(\\sqrt{3})=\\frac{\\pi}{3}
+]
+
+[
+\\text{Quadrant III} \\Rightarrow \\angle c_2=-\\frac{2\\pi}{3}
+]
+
+[
+|c_{-2}|=\\frac{1}{2},\\quad
+\\angle c_{-2}=\\frac{2\\pi}{3}
+]
+
+---
+
+*Final Answer*
+
+*Magnitude plot points*
+[
+(-2,\\tfrac{1}{2}),\\ (-1,\\tfrac{\\sqrt{5}}{2}),\\ (0,1),\\ (1,\\tfrac{\\sqrt{5}}{2}),\\ (2,\\tfrac{1}{2})
+]
+
+*Phase plot points*
+[
+(-2,\\tfrac{2\\pi}{3}),\\ (-1,\\tan^{-1}(2)),\\ (0,0),\\ (1,-\\tan^{-1}(2)),\\ (2,-\\tfrac{2\\pi}{3})
+]`;
+
+const SEC_COLORS = {
+  question:'#185FA5', given:'#0F6E56', formula:'#854F0B',
+  solution:'#534AB7', 'final answer':'#A32D2D', answer:'#A32D2D',
+  note:'#884488', default:'#5F5E5A'
+};
+
+function getSectionColor(name) {
+  const k = name.toLowerCase();
+  for (const key in SEC_COLORS) if (k.includes(key)) return SEC_COLORS[key];
+  return SEC_COLORS.default;
+}
+
+// ── Unicode math renderer output → tool format ───────────────────────────────
+// Handles copy-pasted output from AI chat / mobile math renderers where equations
+// appear as stacked Unicode lines (numerators/denominators on separate lines,
+// subscripts inline, etc.) rather than LaTeX.
+
+const UNICODE_TO_LATEX_CHAR = {
+  'α':'\\alpha','β':'\\beta','γ':'\\gamma','δ':'\\delta','ε':'\\epsilon',
+  'θ':'\\theta','λ':'\\lambda','μ':'\\mu','π':'\\pi','σ':'\\sigma',
+  'τ':'\\tau','φ':'\\phi','ω':'\\omega','Ω':'\\Omega','Σ':'\\Sigma',
+  '∞':'\\infty','∂':'\\partial','∇':'\\nabla',
+  '≤':'\\leq','≥':'\\geq','≠':'\\neq','≈':'\\approx','≡':'\\equiv',
+  '∈':'\\in','∉':'\\notin','∪':'\\cup','∩':'\\cap',
+  '⇒':'\\Rightarrow','⇔':'\\Leftrightarrow','→':'\\rightarrow',
+  '±':'\\pm','∓':'\\mp','×':'\\times','÷':'\\div','·':'\\cdot',
+  '∫':'\\int','∑':'\\sum','∏':'\\prod',
+  '√':'\\sqrt','∠':'\\angle','∥':'\\parallel',
+};
+
+function unicodeCharToLatex(str) {
+  let out = '';
+  for (const ch of str) {
+    out += UNICODE_TO_LATEX_CHAR[ch] !== undefined
+      ? UNICODE_TO_LATEX_CHAR[ch] + ' '
+      : ch;
+  }
+  return out.trim();
+}
+
+// Detect if a line looks like a math expression (contains operators, Greek, fractions)
+function looksLikeMath(line) {
+  const t = line.trim();
+  if (!t) return false;
+  return /[=+\-*/αβγδεθλμπσφωΩΣ∞∂≤≥≠≈±×∫∑∏√⇒→]/.test(t) ||
+         /^\d+$/.test(t) ||   // lone numeral (numerator/denominator)
+         /^[A-Za-z]\s*$/.test(t); // single letter (could be part of fraction)
+}
+
+// Convert a block of lines that form a stacked Unicode equation into LaTeX
+// Handles the common pattern: line above fraction bar, then fraction-like content
+function convertUnicodeEquationBlock(lines) {
+  // Simple reassembly: join multi-line stacked math into a single flat expression
+  // by detecting numerator / denominator patterns (a lone number above a lone number)
+  const joined = lines.join(' ').replace(/\s+/g, ' ').trim();
+  return unicodeCharToLatex(joined);
+}
+
+// Detect section headers: short lines that are all caps, or end with known keywords,
+// or are followed by math content
+function looksLikeSectionHeader(line) {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  if (/^[👉🔴🟢✅❌⚠️💡🔑📌]+\s/.test(t)) return false; // emoji bullets → text
+  // Capitalized title-case short lines with no math chars
+  if (t.length < 60 && /^[A-Z]/.test(t) && !/[=+\-*/αβγδωΩ∫∑]/.test(t) &&
+      !/^\d/.test(t) && (t.split(' ').length <= 8)) return true;
+  return false;
+}
+
+function preprocessInput(raw) {
+  // Strip zero-width chars
+  raw = raw.replace(/[\u200b\u200c\u200d\uFEFF]/g, '');
+
+  // Convert ### headings to *Section* format
+  raw = raw.replace(/^#{1,6}\s+(.+)$/gm, (_, title) => `*${title.trim()}*`);
+
+  // Convert *Label:* (with colon inside asterisks) to *Label* for section detection
+  raw = raw.replace(/^\*([^*]+?):\*\s*$/gm, (_, label) => `*${label.trim()}*`);
+
+  // Convert *Question N: Title* style headers  
+  raw = raw.replace(/^\*(Question\s+\d+[^*]*)\*\s*$/gm, (_, label) => `*${label.trim()}*`);
+
+  // Convert $$...$$ display math (possibly multiline) to [...] block format
+  raw = raw.replace(/\$\$([\s\S]*?)\$\$/g, (_, latex) => `[\n${latex.trim()}\n]`);
+
+  // Convert $...$ inline math to \(...\) format
+  raw = raw.replace(/\$([^$\n]+?)\$/g, (_, latex) => `\\(${latex.trim()}\\)`);
+
+  // If input already uses [LaTeX], \[LaTeX\], or \(...\) format, pass through with minimal cleanup
+  if (/\[[\s\S]*?\\[a-zA-Z{]/.test(raw) || /\[[\s\S]{3,}?\]/.test(raw) ||
+      /\\\[[\s\S]*?\\\]/.test(raw) || /\\\([\s\S]*?\\\)/.test(raw)) {
+    return raw;
+  }
+
+  // Otherwise treat as Unicode-rendered math output (copy-paste from AI chat)
+  const lines = raw.split('\n');
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) { i++; continue; }
+
+    // Horizontal rules
+    if (/^[-─═]{3,}$/.test(trimmed)) { out.push('---'); i++; continue; }
+
+    // Emoji-prefixed lines → plain text
+    if (/^[👉🔴🟢✅❌⚠️💡🔑📌]/.test(trimmed)) {
+      out.push(trimmed.replace(/^[👉🔴🟢✅❌⚠️💡🔑📌]+\s*/, ''));
+      i++; continue;
+    }
+
+    // Detect stacked fraction blocks: a short math line, then a lone number/letter,
+    // then another math line — collapse them
+    // Heuristic: if this line and next 1-2 lines are all short and math-like,
+    // group them as one equation block
+    const mathBlock = [];
+    let j = i;
+    while (j < lines.length && j < i + 6) {
+      const t = lines[j].trim();
+      if (!t) break;
+      if (looksLikeMath(t)) { mathBlock.push(t); j++; }
+      else break;
+    }
+
+    if (mathBlock.length >= 2) {
+      // Multi-line math block: reassemble as LaTeX equation
+      const latex = convertUnicodeEquationBlock(mathBlock);
+      out.push('[');
+      out.push(latex);
+      out.push(']');
+      i = j;
+      continue;
+    }
+
+    // Single line that contains math mixed with text
+    if (looksLikeMath(trimmed) && trimmed.length < 60 &&
+        !/^[A-Z][a-z]/.test(trimmed)) {
+      const latex = unicodeCharToLatex(trimmed);
+      out.push('[' + latex + ']');
+      i++; continue;
+    }
+
+    // Section header detection
+    if (looksLikeSectionHeader(trimmed)) {
+      out.push('*' + trimmed + '*');
+      i++; continue;
+    }
+
+    // Plain text
+    out.push(trimmed);
+    i++;
+  }
+
+  return out.join('\n');
+}
+
+
+function tokenize(text) {
+  const lines = text.split('\n');
+  const tokens = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (/^---+/.test(trimmed)) { tokens.push({type:'hr'}); i++; continue; }
+    const secMatch = trimmed.match(/^\*([^*]+)\*\s*:?\s*$/);
+    if (secMatch) { tokens.push({type:'section', text:secMatch[1].trim()}); i++; continue; }
+
+    // Handle \[...\] display math (possibly spanning multiple lines)
+    if (trimmed.startsWith('\\[')) {
+      let eq = trimmed.slice(2);
+      if (eq.endsWith('\\]')) { eq = eq.slice(0, -2).trim(); }
+      else {
+        i++;
+        while (i < lines.length && !lines[i].includes('\\]')) { eq += '\n' + lines[i]; i++; }
+        if (i < lines.length) eq += '\n' + lines[i].slice(0, lines[i].lastIndexOf('\\]'));
+      }
+      tokens.push({type:'eq', latex:eq.trim()}); i++; continue;
+    }
+
+    // Handle [LaTeX] block format (possibly spanning multiple lines)
+    // The block ends at a line that is JUST "]" (possibly with whitespace),
+    // not a ] that is part of the equation like \right] or ]_{...}
+    if (trimmed.startsWith('[') && !trimmed.startsWith('[Content')) {
+      let eq = trimmed.slice(1);
+      // Check if it closes on the same line
+      if (eq.endsWith(']') && !eq.slice(0,-1).includes('[')) {
+        eq = eq.slice(0,-1).trim();
+      } else if (!eq.endsWith(']')) {
+        // Multi-line: collect until a line that is ONLY "]"
+        i++;
+        while (i < lines.length) {
+          const tl = lines[i].trim();
+          if (tl === ']') { break; } // standalone closing bracket
+          eq += '\n' + lines[i];
+          i++;
+        }
+        // i now points at the closing ']' line (or past end)
+      }
+      tokens.push({type:'eq', latex:eq.trim()}); i++; continue;
+    }
+
+    if (trimmed) {
+      let html = trimmed
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        // inline \(...\) math
+        .replace(/\\\((.+?)\\\)/g, (_, e) => `\\(${e}\\)`)
+        // inline [LaTeX] shorthand
+        .replace(/\[([^\]]+)\]/g, (_, e) => `\\(${e}\\)`);
+      tokens.push({type:'text', html});
+    }
+    i++;
+  }
+  return tokens;
+}
+
+// Fix LaTeX for MathJax preview: balance \left/\right pairs,
+// and ensure every \left has a matching \right and vice versa.
+function sanitizeLatexForPreview(latex) {
+  // Count \left and \right occurrences
+  const lefts = (latex.match(/\\left\s*(?:[([|{\\]|\\[a-zA-Z]+)/g) || []).length;
+  const rights = (latex.match(/\\right\s*(?:[)\]|{}\\]|\\[a-zA-Z]+)/g) || []).length;
+  if (lefts === rights) return latex; // already balanced
+
+  // If unbalanced, strip ALL \left and \right — MathJax renders fine without them
+  return latex.replace(/\\(left|right)\s*/g, '');
+}
+
+function renderTokens(tokens, forExport=false) {
+  let html = '';
+  for (const tok of tokens) {
+    if (tok.type === 'hr') {
+      html += '<hr class="divider">';
+    } else if (tok.type === 'section') {
+      const color = getSectionColor(tok.text);
+      if (forExport) html += `<div style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:${color};border-left:3px solid ${color};padding-left:10px;margin:1.4rem 0 .5rem">${tok.text}</div>`;
+      else html += `<div class="sec-label" style="color:${color};border-left-color:${color}">${tok.text}</div>`;
+    } else if (tok.type === 'eq') {
+      const previewLatex = forExport ? tok.latex : sanitizeLatexForPreview(tok.latex);
+      if (forExport) html += `<div style="text-align:center;margin:.9rem 0;font-size:15pt">\\[${previewLatex}\\]</div>`;
+      else html += `<div class="eq-display">\\[${previewLatex}\\]</div>`;
+    } else if (tok.type === 'text') {
+      if (forExport) html += `<p style="font-size:11pt;line-height:1.75;margin:.25rem 0">${tok.html}</p>`;
+      else html += `<div class="plain-line">${tok.html}</div>`;
+    }
+  }
+  return html;
+}
+
+async function renderPreview() {
+  const raw = preprocessInput(document.getElementById('input').value.trim());
+  const preview = document.getElementById('preview');
+  if (!raw) { preview.innerHTML = '<div class="preview-empty">Nothing to render yet</div>'; return; }
+  const tokens = tokenize(raw);
+  preview.innerHTML = renderTokens(tokens);
+  if (window.MathJax) await MathJax.typesetPromise([preview]);
+  setStatus('Rendered successfully');
+}
+
+function buildExportHTML() {
+  const title = document.getElementById('docTitle').value || 'Document';
+  const raw = document.getElementById('input').value.trim();
+  const tokens = tokenize(preprocessInput(raw));
+  const body = renderTokens(tokens, true);
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHTML(title)}</title><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"><\/script><style>body{font-family:'Times New Roman',Georgia,serif;max-width:720px;margin:60px auto;padding:0 56px;color:#111;line-height:1.8;}h1{font-size:18pt;font-weight:600;text-align:center;margin-bottom:2rem;}hr{border:none;border-top:0.5px solid #ccc;margin:1rem 0;}@media print{body{margin:0;padding:40px;}}</style></head><body><h1>${escHTML(title)}</h1>${body}<p style="font-size:9pt;color:#bbb;text-align:right;margin-top:3rem"></p></body></html>`;
+}
+
+function escHTML(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function exportHTML() {
+  const html = buildExportHTML();
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  const fname = (document.getElementById('docTitle').value||'document').replace(/\s+/g,'_').replace(/[^\w-]/g,'');
+  a.download = fname + '.html'; a.click(); URL.revokeObjectURL(url);
+  setStatus('Downloaded! Open the .html file in Microsoft Word.');
+}
+
+function exportPDF() {
+  const html = buildExportHTML();
+  const w = window.open('', '_blank');
+  if (!w) { setStatus('Allow pop-ups in your browser first.'); return; }
+  w.document.write(html); w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 1800);
+  setStatus('Print dialog opened — choose "Save as PDF".');
+}
+
+function loadExample() { document.getElementById('input').value = EXAMPLE; renderPreview(); }
+function clearAll() {
+  document.getElementById('input').value = '';
+  document.getElementById('preview').innerHTML = '<div class="preview-empty">Paste your reply and click Preview</div>';
+  setStatus('');
+}
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+// ─── OMML (Office Math Markup Language) LaTeX Converter ─────────────────────
+// Produces native editable Word equations — NOT images
+
+const SYMBOL_MAP = {
+  'alpha':'α','beta':'β','gamma':'γ','delta':'δ','epsilon':'ε','zeta':'ζ',
+  'eta':'η','theta':'θ','iota':'ι','kappa':'κ','lambda':'λ','mu':'μ',
+  'nu':'ν','xi':'ξ','pi':'π','rho':'ρ','sigma':'σ','tau':'τ',
+  'upsilon':'υ','phi':'φ','chi':'χ','psi':'ψ','omega':'ω',
+  'Gamma':'Γ','Delta':'Δ','Theta':'Θ','Lambda':'Λ','Xi':'Ξ',
+  'Pi':'Π','Sigma':'Σ','Upsilon':'Υ','Phi':'Φ','Psi':'Ψ','Omega':'Ω',
+  'pm':'±','mp':'∓','times':'×','div':'÷','cdot':'·','cdots':'⋯',
+  'ldots':'…','vdots':'⋮','ddots':'⋱',
+  'leq':'≤','geq':'≥','neq':'≠','approx':'≈','equiv':'≡','sim':'∼',
+  'le':'≤','ge':'≥','ne':'≠',
+  'in':'∈','notin':'∉','subset':'⊂','supset':'⊃','cup':'∪','cap':'∩',
+  'infty':'∞','partial':'∂','nabla':'∇','forall':'∀','exists':'∃',
+  'Rightarrow':'⇒','Leftarrow':'⇐','Leftrightarrow':'⇔',
+  'rightarrow':'→','leftarrow':'←','leftrightarrow':'↔',
+  'to':'→','gets':'←',
+  'Re':'ℜ','Im':'ℑ',
+  'angle':'∠','perp':'⊥','parallel':'∥',
+  'int':'∫','iint':'∬','iiint':'∭','oint':'∮',
+  'sum':'∑','prod':'∏',
+  'langle':'⟨','rangle':'⟩',
+  'lfloor':'⌊','rfloor':'⌋',
+  'lceil':'⌈','rceil':'⌉',
+};
+
+const BRACKET_MAP = {
+  '(':'(', ')':')', '[':'[', ']':']',
+  '{':'{', '}':'}',
+  '|':'|', 'vert':'|',
+  'langle':'⟨','rangle':'⟩',
+  'lfloor':'⌊','rfloor':'⌋',
+  'lceil':'⌈','rceil':'⌉',
+  '.':'',
+};
+
+function escXml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+function ommlRun(text, isOp=false) {
+  if (!text) return '';
+  const esc = escXml(text);
+  if (isOp) return `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">${esc}</m:t></m:r>`;
+  return `<m:r><m:t xml:space="preserve">${esc}</m:t></m:r>`;
+}
+
+function lexLatex(s) {
+  const tokens = [];
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === '\\') {
+      let j = i + 1;
+      if (j >= s.length) { i++; continue; }
+      if (/[a-zA-Z]/.test(s[j])) {
+        while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+        tokens.push({t:'cmd', v:s.slice(i+1,j)});
+      } else {
+        tokens.push({t:'cmd', v:s[j]}); j++;
+      }
+      i = j;
+    } else if (s[i] === '{') { tokens.push({t:'lbrace'}); i++; }
+    else if (s[i] === '}') { tokens.push({t:'rbrace'}); i++; }
+    else if (s[i] === '^') { tokens.push({t:'sup'}); i++; }
+    else if (s[i] === '_') { tokens.push({t:'sub'}); i++; }
+    else if (s[i] === '&') { tokens.push({t:'amp'}); i++; }
+    else if (s[i] === '\n' || s[i] === '\r') { i++; }
+    else if (/\s/.test(s[i])) { i++; }
+    else { tokens.push({t:'char', v:s[i]}); i++; }
+  }
+  return tokens;
+}
+
+function createParser(toks) {
+  let p = 0;
+
+  function peek() { return toks[p]; }
+  function consume() { return toks[p++]; }
+
+  function collectArgToks() {
+    if (!peek()) return [];
+    if (peek().t === 'lbrace') {
+      consume();
+      const out = [];
+      let d = 0;
+      while (p < toks.length) {
+        const t = toks[p];
+        if (t.t === 'rbrace' && d === 0) { p++; break; }
+        if (t.t === 'lbrace') d++;
+        if (t.t === 'rbrace') d--;
+        out.push(t); p++;
+      }
+      return out;
+    }
+    // single token
+    return [consume()];
+  }
+
+  function parseArgToks() { return parseSubTokens(collectArgToks()); }
+
+  function parseSubTokens(subToks) {
+    if (!subToks || subToks.length === 0) return '';
+    return createParser(subToks).parseAll();
+  }
+
+  function handleCmd(cmd) {
+    const MATH_FUNCS = ['sin','cos','tan','cot','sec','csc','arcsin','arccos','arctan',
+                        'log','ln','exp','max','min','limsup','liminf',
+                        'det','ker','dim','deg','Pr','hom','arg'];
+    if (MATH_FUNCS.includes(cmd)) return ommlRun(cmd, true);
+
+    // \lim, \sup, \inf — render as limLow if followed by _
+    if (cmd === 'lim' || cmd === 'sup' || cmd === 'inf') {
+      const funcRun = ommlRun(cmd, true);
+      if (peek() && peek().t === 'sub') {
+        consume();
+        const limArg = parseArgToks();
+        return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${funcRun}</m:e><m:lim>${limArg}</m:lim></m:limLow>`;
+      }
+      return funcRun;
+    }
+
+    // \sum, \prod — nary with sub/sup limits
+    if (cmd === 'sum' || cmd === 'prod' || cmd === 'int' || cmd === 'iint' || cmd === 'iiint' || cmd === 'oint') {
+      const chrMap = {sum:'∑', prod:'∏', int:'∫', iint:'∬', iiint:'∭', oint:'∮'};
+      const limLocMap = {sum:'undOvr', prod:'undOvr', int:'subSup', iint:'subSup', iiint:'subSup', oint:'subSup'};
+      const chr = chrMap[cmd];
+      const limLoc = limLocMap[cmd];
+      let subXml = '', supXml = '';
+      // collect optional _ and ^ in any order
+      for (let k = 0; k < 2; k++) {
+        if (peek() && peek().t === 'sub') { consume(); subXml = parseArgToks(); }
+        else if (peek() && peek().t === 'sup') { consume(); supXml = parseArgToks(); }
+        else break;
+      }
+      const subEl = subXml ? `<m:sub>${subXml}</m:sub>` : `<m:sub/>`;
+      const supEl = supXml ? `<m:sup>${supXml}</m:sup>` : `<m:sup/>`;
+      return `<m:nary><m:naryPr><m:chr m:val="${chr}"/><m:limLoc m:val="${limLoc}"/><m:ctrlPr/></m:naryPr>${subEl}${supEl}<m:e></m:e></m:nary>`;
+    }
+
+    if (cmd === 'frac' || cmd === 'tfrac' || cmd === 'dfrac') {
+      const num = parseArgToks();
+      const den = parseArgToks();
+      return `<m:f><m:fPr><m:ctrlPr/></m:fPr><m:num>${num}</m:num><m:den>${den}</m:den></m:f>`;
+    }
+
+    if (cmd === 'sqrt') {
+      // optional degree [n]
+      if (peek() && peek().t === 'char' && peek().v === '[') {
+        consume();
+        const degToks = [];
+        while (peek() && !(peek().t === 'char' && peek().v === ']')) degToks.push(consume());
+        if (peek()) consume();
+        const deg = parseSubTokens(degToks);
+        const base = parseArgToks();
+        return `<m:rad><m:radPr><m:ctrlPr/></m:radPr><m:deg>${deg}</m:deg><m:e>${base}</m:e></m:rad>`;
+      }
+      const base = parseArgToks();
+      return `<m:rad><m:radPr><m:degHide m:val="1"/><m:ctrlPr/></m:radPr><m:deg></m:deg><m:e>${base}</m:e></m:rad>`;
+    }
+
+    if (cmd === 'binom') {
+      const top = parseArgToks();
+      const bot = parseArgToks();
+      return `<m:d><m:dPr><m:begChr m:val="("/><m:endChr m:val=")"/><m:ctrlPr/></m:dPr><m:e><m:m><m:mPr><m:mcs><m:mc><m:mcPr><m:count m:val="1"/><m:mcJc m:val="center"/></m:mcPr></m:mc></m:mcs><m:ctrlPr/></m:mPr><m:mr><m:e>${top}</m:e></m:mr><m:mr><m:e>${bot}</m:e></m:mr></m:m></m:e></m:d>`;
+    }
+
+    if (cmd === 'text' || cmd === 'textrm' || cmd === 'textbf' || cmd === 'textit') {
+      const argToks = collectArgToks();
+      // Resolve any LaTeX symbol commands inside \text{} (e.g. \Omega, \mu, \cdot)
+      const plain = argToks.map(t => {
+        if (t.t === 'cmd') return SYMBOL_MAP[t.v] || t.v;
+        return t.v || '';
+      }).join('');
+      return ommlRun(plain, true);
+    }
+
+    if (cmd === 'mathbf' || cmd === 'boldsymbol') {
+      const inner = parseArgToks();
+      return inner;
+    }
+    if (cmd === 'mathrm' || cmd === 'mathit' || cmd === 'mathbb' || cmd === 'mathcal' || cmd === 'mathsf') {
+      return parseArgToks();
+    }
+
+    if (cmd === 'overline' || cmd === 'bar') {
+      const inner = parseArgToks();
+      return `<m:bar><m:barPr><m:pos m:val="top"/><m:ctrlPr/></m:barPr><m:e>${inner}</m:e></m:bar>`;
+    }
+    if (cmd === 'underline') {
+      const inner = parseArgToks();
+      return `<m:bar><m:barPr><m:pos m:val="bot"/><m:ctrlPr/></m:barPr><m:e>${inner}</m:e></m:bar>`;
+    }
+    if (cmd === 'overbrace') {
+      const inner = parseArgToks();
+      return `<m:limUpp><m:limUppPr><m:ctrlPr/></m:limUppPr><m:e>${inner}</m:e><m:lim>${ommlRun('⏞',false)}</m:lim></m:limUpp>`;
+    }
+    if (cmd === 'underbrace') {
+      const inner = parseArgToks();
+      return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${inner}</m:e><m:lim>${ommlRun('⏟',false)}</m:lim></m:limLow>`;
+    }
+
+    if (cmd === 'hat') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̂"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'tilde') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̃"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'dot') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̇"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'ddot') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̈"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'vec') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="⃗"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'widehat') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̂"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+    if (cmd === 'widetilde') {
+      const inner = parseArgToks();
+      return `<m:acc><m:accPr><m:chr m:val="̃"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
+    }
+
+    if (cmd === 'underset' || cmd === 'overset') {
+      const over = parseArgToks();
+      const base = parseArgToks();
+      if (cmd === 'overset') return `<m:limUpp><m:limUppPr><m:ctrlPr/></m:limUppPr><m:e>${base}</m:e><m:lim>${over}</m:lim></m:limUpp>`;
+      return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${base}</m:e><m:lim>${over}</m:lim></m:limLow>`;
+    }
+
+    if (cmd === 'boxed') {
+      const inner = parseArgToks();
+      // OMML border box wrapping the inner expression
+      return `<m:borderBox><m:borderBoxPr><m:ctrlPr/></m:borderBoxPr><m:e>${inner}</m:e></m:borderBox>`;
+    }
+
+    if (cmd === 'left') return parseDelimited();
+    if (cmd === 'right') return '';
+    if (cmd === 'begin') return parseEnvironment();
+    if (cmd === 'end') { collectArgToks(); return ''; }
+    if (cmd === 'hline') return ''; // silently skip table rules
+
+    // spacing
+    if (cmd === 'quad') return ommlRun('\u2003');
+    if (cmd === 'qquad') return ommlRun('\u2003\u2003');
+    if (cmd === ',') return ommlRun('\u2009');
+    if (cmd === '!') return '';
+    if (cmd === ';') return ommlRun('\u2004');
+    if (cmd === ':') return ommlRun('\u2005');
+    if (cmd === ' ') return ommlRun(' ');
+    if (cmd === '\\') return '';
+    if (cmd === 'newline') return '';
+
+    // special chars
+    if (cmd === '{') return ommlRun('{');
+    if (cmd === '}') return ommlRun('}');
+    if (cmd === '|') return ommlRun('‖', true);
+    if (cmd === 'vert') return ommlRun('|', true);
+    if (cmd === 'langle') return ommlRun('⟨', true);
+    if (cmd === 'rangle') return ommlRun('⟩', true);
+    if (cmd === 'lfloor') return ommlRun('⌊', true);
+    if (cmd === 'rfloor') return ommlRun('⌋', true);
+    if (cmd === 'lceil') return ommlRun('⌈', true);
+    if (cmd === 'rceil') return ommlRun('⌉', true);
+    if (cmd === 'pm') return ommlRun('±', true);
+    if (cmd === 'mp') return ommlRun('∓', true);
+    if (cmd === 'not') return ommlRun('¬', true);
+
+    // big delimiters — treat like normal bracket chars
+    if (['big','Big','bigg','Bigg','bigl','Bigr','biggl','Biggr','bigr','bigl'].includes(cmd)) return '';
+
+    const sym = SYMBOL_MAP[cmd];
+    if (sym) {
+      const OP_SYMS = '+-=<>.,;:|!∑∏∫∬∭∮⇒⇐⇔→←↔±∓×÷·∥≤≥≠≈≡∼∈∉⊂⊃∪∩∂∇∀∃';
+      return ommlRun(sym, OP_SYMS.includes(sym));
+    }
+
+    // unknown — render as upright text
+    return ommlRun(cmd, true);
+  }
+
+  function parseDelimited() {
+    let openBr = '(', closeBr = ')';
+    const nt = peek();
+    if (nt) {
+      if (nt.t === 'char') { openBr = nt.v; consume(); }
+      else if (nt.t === 'cmd') {
+        const c = nt.v; consume();
+        openBr = BRACKET_MAP[c] !== undefined ? BRACKET_MAP[c] : c;
+      }
+    }
+    const contentToks = [];
+    let depth = 0;
+    while (p < toks.length) {
+      const t = toks[p];
+      if (t.t === 'cmd' && t.v === 'left') depth++;
+      if (t.t === 'cmd' && t.v === 'right') { if (depth === 0) { p++; break; } depth--; }
+      contentToks.push(t); p++;
+    }
+    const ct = peek();
+    if (ct) {
+      if (ct.t === 'char') { closeBr = ct.v; consume(); }
+      else if (ct.t === 'cmd') { const c2 = ct.v; consume(); closeBr = BRACKET_MAP[c2] !== undefined ? BRACKET_MAP[c2] : c2; }
+    }
+    const inner = parseSubTokens(contentToks);
+    const bAttr = openBr ? `<m:begChr m:val="${escXml(openBr)}"/>` : `<m:begChr m:val=""/>`;
+    const eAttr = closeBr ? `<m:endChr m:val="${escXml(closeBr)}"/>` : `<m:endChr m:val=""/>`;
+    return `<m:d><m:dPr>${bAttr}${eAttr}<m:grow/><m:ctrlPr/></m:dPr><m:e>${inner}</m:e></m:d>`;
+  }
+
+  function parseEnvironment() {
+    const envToks = collectArgToks();
+    const envName = envToks.map(t => t.v || '').join('').trim();
+    if (['matrix','pmatrix','bmatrix','vmatrix','Vmatrix','Bmatrix','cases','smallmatrix'].includes(envName)) {
+      return parseMatrix(envName);
+    }
+    if (['align','align*','aligned','gather','gather*','gathered','multline','multline*','equation','equation*'].includes(envName)) {
+      return parseAligned();
+    }
+    return '';
+  }
+
+  function parseMatrix(envName) {
+    const brkMap = {
+      pmatrix:['(',')'], bmatrix:['[',']'], vmatrix:['|','|'],
+      Vmatrix:['‖','‖'], Bmatrix:['{','}'], matrix:['',''], cases:['{',''], smallmatrix:['','']
+    };
+    const [beg, end] = brkMap[envName] || ['',''];
+    const rows = []; let cr = []; let cc = [];
+    while (p < toks.length) {
+      const t = toks[p];
+      if (t.t === 'cmd' && t.v === 'end') { p++; collectArgToks(); break; }
+      if (t.t === 'cmd' && t.v === '\\') { cr.push(cc); cc=[]; rows.push(cr); cr=[]; p++; continue; }
+      if (t.t === 'amp') { cr.push(cc); cc=[]; p++; continue; }
+      cc.push(t); p++;
+    }
+    if (cc.length) cr.push(cc);
+    if (cr.length) rows.push(cr);
+    const mCols = Math.max(...rows.map(r => r.length), 1);
+    const mrXml = rows.map(row => {
+      const cells = row.map(cell => `<m:e>${parseSubTokens(cell)}</m:e>`).join('');
+      return `<m:mr>${cells}</m:mr>`;
+    }).join('');
+    const colDefs = `<m:mcs>${Array(mCols).fill(0).map(()=>'<m:mc><m:mcPr><m:count m:val="1"/><m:mcJc m:val="center"/></m:mcPr></m:mc>').join('')}</m:mcs>`;
+    const mXml = `<m:m><m:mPr>${colDefs}<m:ctrlPr/></m:mPr>${mrXml}</m:m>`;
+    if (!beg && !end) return mXml;
+    return `<m:d><m:dPr><m:begChr m:val="${escXml(beg)}"/><m:endChr m:val="${escXml(end)}"/><m:ctrlPr/></m:dPr><m:e>${mXml}</m:e></m:d>`;
+  }
+
+  function parseAligned() {
+    const rows = []; let cr = []; let cc = [];
+    while (p < toks.length) {
+      const t = toks[p];
+      if (t.t === 'cmd' && t.v === 'end') { p++; collectArgToks(); break; }
+      if (t.t === 'cmd' && t.v === '\\') { cr.push(cc); cc=[]; rows.push(cr); cr=[]; p++; continue; }
+      if (t.t === 'amp') { cr.push(cc); cc=[]; p++; continue; }
+      cc.push(t); p++;
+    }
+    if (cc.length) cr.push(cc);
+    if (cr.length) rows.push(cr);
+    return rows.map(row => row.map(cell => parseSubTokens(cell)).join('')).join('');
+  }
+
+  function parseAll() {
+    const parts = [];
+    while (p < toks.length) {
+      const tok = peek();
+      if (!tok || tok.t === 'rbrace') break;
+      if (tok.t === 'amp') { consume(); continue; }
+
+      if (tok.t === 'sub' || tok.t === 'sup') {
+        consume();
+        const script = parseArgToks();
+        if (parts.length > 0) {
+          const last = parts[parts.length - 1];
+          if (tok.t === 'sub') last.sub = (last.sub || '') + script;
+          else last.sup = (last.sup || '') + script;
+        } else {
+          parts.push(tok.t === 'sub' ? {base:'', sub:script, sup:null} : {base:'', sub:null, sup:script});
+        }
+        continue;
+      }
+
+      let base = '';
+      if (tok.t === 'lbrace') {
+        consume();
+        const subToks = [];
+        let d = 0;
+        while (p < toks.length) {
+          const t = toks[p];
+          if (t.t === 'rbrace' && d === 0) { p++; break; }
+          if (t.t === 'lbrace') d++;
+          if (t.t === 'rbrace') d--;
+          subToks.push(t); p++;
+        }
+        base = parseSubTokens(subToks);
+      } else if (tok.t === 'cmd') {
+        consume();
+        base = handleCmd(tok.v);
+      } else if (tok.t === 'char') {
+        consume();
+        const v = tok.v;
+        const isOp = '+-=<>.,;:|!'.includes(v);
+        base = ommlRun(v, isOp);
+      } else { consume(); continue; }
+
+      parts.push({base, sub:null, sup:null});
+    }
+
+    let out = '';
+    for (const pt of parts) {
+      if (pt.sub && pt.sup) {
+        out += `<m:sSubSup><m:sSubSupPr><m:ctrlPr/></m:sSubSupPr><m:e>${pt.base}</m:e><m:sub>${pt.sub}</m:sub><m:sup>${pt.sup}</m:sup></m:sSubSup>`;
+      } else if (pt.sub) {
+        out += `<m:sSub><m:sSubPr><m:ctrlPr/></m:sSubPr><m:e>${pt.base}</m:e><m:sub>${pt.sub}</m:sub></m:sSub>`;
+      } else if (pt.sup) {
+        out += `<m:sSup><m:sSupPr><m:ctrlPr/></m:sSupPr><m:e>${pt.base}</m:e><m:sup>${pt.sup}</m:sup></m:sSup>`;
+      } else {
+        out += pt.base;
+      }
+    }
+    return out;
+  }
+
+  return { parseAll };
+}
+
+function latexToOmml(latex) {
+  const tokens = lexLatex(latex.trim());
+  const body = createParser(tokens).parseAll();
+  return `<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:oMathParaPr><m:jc m:val="center"/></m:oMathParaPr><m:oMath>${body}</m:oMath></m:oMathPara>`;
+}
+
+// ─── DOCX Export via raw XML + JSZip ─────────────────────────────────────────
+let jsZipLoaded = false;
+
+async function ensureJSZip() {
+  if (window.JSZip) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function buildDocumentXml(tokens, title) {
+  const ns = [
+    'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"',
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"',
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"',
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"',
+    'mc:Ignorable="w14"'
+  ].join(' ');
+
+  const SEC_HEX = {
+    question:'185FA5', given:'0F6E56', formula:'854F0B',
+    solution:'534AB7', 'final answer':'A32D2D', answer:'A32D2D',
+    note:'884488', default:'5F5E5A'
+  };
+  function getSecHex(name) {
+    const k = name.toLowerCase();
+    for (const key in SEC_HEX) if (k.includes(key)) return SEC_HEX[key];
+    return SEC_HEX.default;
+  }
+  function stripHTML(html) { const d=document.createElement('div'); d.innerHTML=html; return d.textContent||''; }
+  function wx(s) { return escXml(s); }
+
+  let body = '';
+
+  // Title
+  body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="320"/></w:pPr>`
+        + `<w:r><w:rPr><w:b/><w:sz w:val="36"/><w:szCs w:val="36"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
+        + `<w:t>${wx(title)}</w:t></w:r></w:p>`;
+
+  for (const tok of tokens) {
+    if (tok.type === 'hr') {
+      body += `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="CCCCCC"/></w:pBdr>`
+            + `<w:spacing w:before="160" w:after="160"/></w:pPr></w:p>`;
+
+    } else if (tok.type === 'section') {
+      const hex = getSecHex(tok.text);
+      body += `<w:p><w:pPr>`
+            + `<w:pBdr><w:left w:val="single" w:sz="12" w:space="8" w:color="${hex}"/></w:pBdr>`
+            + `<w:ind w:left="140"/><w:spacing w:before="280" w:after="100"/></w:pPr>`
+            + `<w:r><w:rPr><w:b/><w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="${hex}"/>`
+            + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
+            + `<w:t>${wx(tok.text.toUpperCase())}</w:t></w:r></w:p>`;
+
+    } else if (tok.type === 'eq') {
+      try {
+        const omml = latexToOmml(tok.latex);
+        // Strip the xmlns from the inner OMML since it's declared on w:document
+        const ommlClean = omml.replace(/xmlns:m="[^"]*"/g, '');
+        body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="120"/></w:pPr>`
+              + ommlClean + `</w:p>`;
+      } catch(e) {
+        body += `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>`
+              + `<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="22"/></w:rPr>`
+              + `<w:t>${wx(tok.latex)}</w:t></w:r></w:p>`;
+      }
+
+    } else if (tok.type === 'text') {
+      const plain = stripHTML(tok.html);
+      if (plain.trim()) {
+        body += `<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>`
+              + `<w:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/>`
+              + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
+              + `<w:t xml:space="preserve">${wx(plain)}</w:t></w:r></w:p>`;
+      }
+    }
+  }
+
+  // Footer
+  body += `<w:p><w:pPr><w:jc w:val="right"/><w:spacing w:before="400"/></w:pPr>`
+        + `<w:r><w:rPr><w:sz w:val="18"/><w:color w:val="BBBBBB"/>`
+        + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
+        + `<w:t></w:t></w:r></w:p>`;
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+       + `<w:document ${ns}>`
+       + `<w:body>${body}`
+       + `<w:sectPr>`
+       + `<w:pgSz w:w="12240" w:h="15840"/>`
+       + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>`
+       + `</w:sectPr></w:body></w:document>`;
+}
+
+async function exportDOCX() {
+  const raw = document.getElementById('input').value.trim();
+  if (!raw) { setStatus('Nothing to export — paste your reply first.'); return; }
+  setStatus('Building .docx with editable equations…');
+
+  try {
+    await ensureJSZip();
+  } catch(e) {
+    setStatus('Failed to load JSZip. Check your internet connection.');
+    return;
+  }
+
+  const title = document.getElementById('docTitle').value || 'Document';
+  const tokens = tokenize(preprocessInput(raw));
+  const documentXml = buildDocumentXml(tokens, title);
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+</Types>`;
+
+  const relsMain = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const wordRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+</Relationships>`;
+
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+          xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
+        <w:sz w:val="24"/>
+        <w:szCs w:val="24"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:spacing w:after="160" w:line="259" w:lineRule="auto"/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+  </w:style>
+</w:styles>`;
+
+  const settings = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <m:mathPr>
+    <m:mathFont m:val="Cambria Math"/>
+    <m:brkBin m:val="before"/>
+    <m:brkBinSub m:val="--"/>
+    <m:smallFrac m:val="0"/>
+    <m:dispDef/>
+    <m:lMargin m:val="0"/>
+    <m:rMargin m:val="0"/>
+    <m:defJc m:val="centerGroup"/>
+    <m:wrapIndent m:val="1440"/>
+    <m:intLim m:val="subSup"/>
+    <m:naryLim m:val="undOvr"/>
+  </m:mathPr>
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+  </w:compat>
+</w:settings>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', relsMain);
+  zip.file('word/document.xml', documentXml);
+  zip.file('word/_rels/document.xml.rels', wordRels);
+  zip.file('word/styles.xml', styles);
+  zip.file('word/settings.xml', settings);
+
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 }
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  const fname = title.replace(/\s+/g,'_').replace(/[^\w-]/g,'') || 'document';
+  a.download = fname + '.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('✓ Downloaded ' + fname + '.docx — equations are fully editable in Word!');
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') renderPreview();
+});
+</script>
+</body>
+</html>
