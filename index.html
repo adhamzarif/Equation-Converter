@@ -30,12 +30,14 @@
   .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
   .btn-primary:hover { opacity: .85; background: var(--text); }
   textarea { flex: 1; resize: none; border: none; outline: none; padding: 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.65; background: var(--bg); color: var(--text); border-right: 0.5px solid var(--border); }
-  .preview-pane { flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--bg); }
+  .preview-pane { flex: 1; overflow-y: auto; padding: 40px 56px; background: var(--bg); }
   .preview-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text3); font-size: 13px; }
-  .sec-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; padding-left: 10px; margin: 1.4rem 0 .5rem; line-height: 1.4; border-left-width: 3px; border-left-style: solid; }
-  .eq-display { text-align: center; margin: .8rem 0; overflow-x: auto; padding: 4px 0; }
-  .plain-line { font-size: 14px; line-height: 1.75; margin: .2rem 0; }
-  .divider { border: none; border-top: 0.5px solid var(--border); margin: 1rem 0; }
+  .preview-doc { font-family: 'Times New Roman', Georgia, serif; max-width: 680px; margin: 0 auto; color: #111; line-height: 1.8; }
+  .preview-doc-title { font-size: 18pt; font-weight: 600; text-align: center; margin-bottom: 2rem; }
+  .sec-label { font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: .06em; padding-left: 10px; margin: 1.4rem 0 .5rem; line-height: 1.4; border-left-width: 3px; border-left-style: solid; }
+  .eq-display { text-align: center; margin: .9rem 0; overflow-x: auto; padding: 4px 0; }
+  .plain-line { font-size: 11pt; line-height: 1.75; margin: .25rem 0; font-family: 'Times New Roman', Georgia, serif; }
+  .divider { border: none; border-top: 0.5px solid #ccc; margin: 1rem 0; }
   .title-row { padding: 8px 16px; border-bottom: 0.5px solid var(--border); background: var(--bg2); display: flex; align-items: center; gap: 8px; }
   .title-row label { font-size: 12px; color: var(--text3); white-space: nowrap; }
   .title-row input { flex: 1; border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 5px 10px; font-size: 13px; background: var(--bg); color: var(--text); outline: none; }
@@ -46,7 +48,9 @@
     header, .pane:first-child, .pane-header, .title-row, .export-bar { display: none !important; }
     .main { display: block; height: auto; }
     .preview-pane { padding: 0; overflow: visible; }
-    body { background: white; }
+    body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+    .sec-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    mjx-container svg * { fill: currentColor !important; }
   }
 </style>
 </head>
@@ -57,7 +61,7 @@
     <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.2"/>
     <path d="M6 7h8M6 10h5M6 13h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
   </svg>
-  <span>Paste → Preview → Export to .docx / PDF / HTML <span class="badge">✓ Equations editable in Word</span></span>
+  <span>Paste → Preview → Export to .docx / PDF / HTML <span class="badge">✓ Native editable equations in Word</span></span>
 </header>
 
 <div class="title-row">
@@ -422,22 +426,23 @@ function sanitizeLatexForPreview(latex) {
   return latex.replace(/\\(left|right)\s*/g, '');
 }
 
-function renderTokens(tokens, forExport=false) {
+function renderTokens(tokens) {
   let html = '';
   for (const tok of tokens) {
     if (tok.type === 'hr') {
       html += '<hr class="divider">';
     } else if (tok.type === 'section') {
       const color = getSectionColor(tok.text);
-      if (forExport) html += `<div style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:${color};border-left:3px solid ${color};padding-left:10px;margin:1.4rem 0 .5rem">${tok.text}</div>`;
-      else html += `<div class="sec-label" style="color:${color};border-left-color:${color}">${tok.text}</div>`;
+      // Render inline \(...\) math inside section labels
+      const labelHtml = tok.text.replace(/\\\((.+?)\\\)/g, (_, e) => `\\(${e}\\)`);
+      html += `<div class="sec-label" style="color:${color};border-left-color:${color}">${labelHtml}</div>`;
     } else if (tok.type === 'eq') {
-      const previewLatex = forExport ? tok.latex : sanitizeLatexForPreview(tok.latex);
-      if (forExport) html += `<div style="text-align:center;margin:.9rem 0;font-size:15pt">\\[${previewLatex}\\]</div>`;
-      else html += `<div class="eq-display">\\[${previewLatex}\\]</div>`;
+      const latex = sanitizeLatexForPreview(tok.latex);
+      // store original latex as data attr for DOCX export to read
+      const safe = tok.latex.replace(/"/g, '&quot;');
+      html += `<div class="eq-display" data-latex="${safe}">\\[${latex}\\]</div>`;
     } else if (tok.type === 'text') {
-      if (forExport) html += `<p style="font-size:11pt;line-height:1.75;margin:.25rem 0">${tok.html}</p>`;
-      else html += `<div class="plain-line">${tok.html}</div>`;
+      html += `<div class="plain-line">${tok.html}</div>`;
     }
   }
   return html;
@@ -448,21 +453,37 @@ async function renderPreview() {
   const preview = document.getElementById('preview');
   if (!raw) { preview.innerHTML = '<div class="preview-empty">Nothing to render yet</div>'; return; }
   const tokens = tokenize(raw);
-  preview.innerHTML = renderTokens(tokens);
+  const title = document.getElementById('docTitle').value || '';
+  const titleHtml = title ? `<div style="font-size:18pt;font-weight:600;text-align:center;margin-bottom:2rem;font-family:'Times New Roman',Georgia,serif">${escHTML(title)}</div>` : '';
+  preview.innerHTML = `<div style="font-family:'Times New Roman',Georgia,serif;max-width:680px;margin:0 auto;color:#111;line-height:1.8">${titleHtml}${renderTokens(tokens)}</div>`;
   if (window.MathJax) await MathJax.typesetPromise([preview]);
-  setStatus('Rendered successfully');
+  setStatus('Rendered — ready to export');
 }
 
 function buildExportHTML() {
   const title = document.getElementById('docTitle').value || 'Document';
   const raw = document.getElementById('input').value.trim();
   const tokens = tokenize(preprocessInput(raw));
-  const body = renderTokens(tokens, true);
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHTML(title)}</title><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"><\/script><style>body{font-family:'Times New Roman',Georgia,serif;max-width:720px;margin:60px auto;padding:0 56px;color:#111;line-height:1.8;}h1{font-size:18pt;font-weight:600;text-align:center;margin-bottom:2rem;}hr{border:none;border-top:0.5px solid #ccc;margin:1rem 0;}@media print{body{margin:0;padding:40px;}}</style></head><body><h1>${escHTML(title)}</h1>${body}<p style="font-size:9pt;color:#bbb;text-align:right;margin-top:3rem"></p></body></html>`;
+  let body = '';
+  for (const tok of tokens) {
+    if (tok.type === 'hr') {
+      body += '<hr style="border:none;border-top:0.5px solid #ccc;margin:1rem 0">';
+    } else if (tok.type === 'section') {
+      const color = getSectionColor(tok.text);
+      const labelHtml = tok.text.replace(/\\\((.+?)\\\)/g, (_, e) => `\\(${e}\\)`);
+      body += `<div style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:${color};border-left:3px solid ${color};padding-left:10px;margin:1.4rem 0 .5rem;line-height:1.4">${labelHtml}</div>`;
+    } else if (tok.type === 'eq') {
+      body += `<div style="text-align:center;margin:.9rem 0">\\[${tok.latex}\\]</div>`;
+    } else if (tok.type === 'text') {
+      body += `<p style="font-size:11pt;line-height:1.75;margin:.25rem 0">${tok.html}</p>`;
+    }
+  }
+  const titleHtml = title ? `<h1 style="font-size:18pt;font-weight:600;text-align:center;margin-bottom:2rem">${escHTML(title)}</h1>` : '';
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHTML(title)}</title><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"><\/script><style>body{font-family:'Times New Roman',Georgia,serif;max-width:720px;margin:60px auto;padding:0 56px;color:#111;line-height:1.8;}mjx-container svg{color:inherit;}@media print{body{margin:0;padding:40px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}mjx-container svg *{fill:currentColor !important;}div[style*="color:"]{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>${titleHtml}${body}</body></html>`;
 }
 
 function escHTML(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function exportHTML() {
@@ -476,12 +497,88 @@ function exportHTML() {
 }
 
 function exportPDF() {
-  const html = buildExportHTML();
+  const title = document.getElementById('docTitle').value || 'Document';
+  const raw = document.getElementById('input').value.trim();
+  const tokens = tokenize(preprocessInput(raw));
+  let body = '';
+  for (const tok of tokens) {
+    if (tok.type === 'hr') {
+      body += '<hr style="border:none;border-top:0.5px solid #ccc;margin:1rem 0">';
+    } else if (tok.type === 'section') {
+      const color = getSectionColor(tok.text);
+      const labelHtml = tok.text.replace(/\\\((.+?)\\\)/g, (_, e) => `\\(${e}\\)`);
+      body += `<div style="font-size:11pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:${color};border-left:3px solid ${color};padding-left:10px;margin:1.4rem 0 .5rem;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${labelHtml}</div>`;
+    } else if (tok.type === 'eq') {
+      body += `<div style="text-align:center;margin:.9rem 0;color:#111;">\\[${tok.latex}\\]</div>`;
+    } else if (tok.type === 'text') {
+      body += `<p style="font-size:11pt;line-height:1.75;margin:.25rem 0">${tok.html}</p>`;
+    }
+  }
+  const titleHtml = title ? `<h1 style="font-size:18pt;font-weight:600;text-align:center;margin-bottom:2rem">${escHTML(title)}</h1>` : '';
+
   const w = window.open('', '_blank');
   if (!w) { setStatus('Allow pop-ups in your browser first.'); return; }
-  w.document.write(html); w.document.close();
-  setTimeout(() => { w.focus(); w.print(); }, 1800);
-  setStatus('Print dialog opened — choose "Save as PDF".');
+
+  // We write a self-contained page that:
+  // 1. Loads MathJax with SVG renderer using font=mathjax-modern (lighter weight)
+  // 2. Waits for MathJax to finish via its promise
+  // 3. After typesetting, patches every SVG fill to #111 (not pure black, matches preview)
+  // 4. Then triggers print
+  const pdfHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${escHTML(title)}</title>
+<style>
+  body {
+    font-family: 'Times New Roman', Georgia, serif;
+    max-width: 720px;
+    margin: 60px auto;
+    padding: 0 56px;
+    color: #1a1a18;
+    line-height: 1.8;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  /* CHTML math inherits color from body — no SVG fill issues */
+  mjx-container { color: #1a1a18 !important; }
+  mjx-container * { color: #1a1a18 !important; border-color: #1a1a18 !important; }
+  @media print {
+    body { margin: 0; padding: 40px; color: #1a1a18; }
+    mjx-container { color: #1a1a18 !important; }
+    mjx-container * { color: #1a1a18 !important; border-color: #1a1a18 !important; }
+  }
+</style>
+<script>
+  window.MathJax = {
+    chtml: { scale: 1, matchFontHeight: true },
+    startup: {
+      ready() {
+        MathJax.startup.defaultReady();
+        MathJax.startup.promise.then(() => {
+          // Force all CHTML math elements to use exact preview color
+          document.querySelectorAll('mjx-container, mjx-container *').forEach(el => {
+            el.style.color = '#1a1a18';
+          });
+          setTimeout(() => { window.focus(); window.print(); }, 400);
+        });
+      }
+    }
+  };
+<\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-chtml.js"><\/script>
+</head>
+<body>
+${titleHtml}
+${body}
+</body>
+</html>`;
+
+  w.document.open();
+  w.document.write(pdfHtml);
+  w.document.close();
+  setStatus('Waiting for equations to render, then print dialog will open…');
 }
 
 function loadExample() { document.getElementById('input').value = EXAMPLE; renderPreview(); }
@@ -491,452 +588,7 @@ function clearAll() {
   setStatus('');
 }
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
-
-// ─── OMML (Office Math Markup Language) LaTeX Converter ─────────────────────
-// Produces native editable Word equations — NOT images
-
-const SYMBOL_MAP = {
-  'alpha':'α','beta':'β','gamma':'γ','delta':'δ','epsilon':'ε','zeta':'ζ',
-  'eta':'η','theta':'θ','iota':'ι','kappa':'κ','lambda':'λ','mu':'μ',
-  'nu':'ν','xi':'ξ','pi':'π','rho':'ρ','sigma':'σ','tau':'τ',
-  'upsilon':'υ','phi':'φ','chi':'χ','psi':'ψ','omega':'ω',
-  'Gamma':'Γ','Delta':'Δ','Theta':'Θ','Lambda':'Λ','Xi':'Ξ',
-  'Pi':'Π','Sigma':'Σ','Upsilon':'Υ','Phi':'Φ','Psi':'Ψ','Omega':'Ω',
-  'pm':'±','mp':'∓','times':'×','div':'÷','cdot':'·','cdots':'⋯',
-  'ldots':'…','vdots':'⋮','ddots':'⋱',
-  'leq':'≤','geq':'≥','neq':'≠','approx':'≈','equiv':'≡','sim':'∼',
-  'le':'≤','ge':'≥','ne':'≠',
-  'in':'∈','notin':'∉','subset':'⊂','supset':'⊃','cup':'∪','cap':'∩',
-  'infty':'∞','partial':'∂','nabla':'∇','forall':'∀','exists':'∃',
-  'Rightarrow':'⇒','Leftarrow':'⇐','Leftrightarrow':'⇔',
-  'rightarrow':'→','leftarrow':'←','leftrightarrow':'↔',
-  'to':'→','gets':'←',
-  'Re':'ℜ','Im':'ℑ',
-  'angle':'∠','perp':'⊥','parallel':'∥',
-  'int':'∫','iint':'∬','iiint':'∭','oint':'∮',
-  'sum':'∑','prod':'∏',
-  'langle':'⟨','rangle':'⟩',
-  'lfloor':'⌊','rfloor':'⌋',
-  'lceil':'⌈','rceil':'⌉',
-};
-
-const BRACKET_MAP = {
-  '(':'(', ')':')', '[':'[', ']':']',
-  '{':'{', '}':'}',
-  '|':'|', 'vert':'|',
-  'langle':'⟨','rangle':'⟩',
-  'lfloor':'⌊','rfloor':'⌋',
-  'lceil':'⌈','rceil':'⌉',
-  '.':'',
-};
-
-function escXml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-}
-
-function ommlRun(text, isOp=false) {
-  if (!text) return '';
-  const esc = escXml(text);
-  if (isOp) return `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">${esc}</m:t></m:r>`;
-  return `<m:r><m:t xml:space="preserve">${esc}</m:t></m:r>`;
-}
-
-function lexLatex(s) {
-  const tokens = [];
-  let i = 0;
-  while (i < s.length) {
-    if (s[i] === '\\') {
-      let j = i + 1;
-      if (j >= s.length) { i++; continue; }
-      if (/[a-zA-Z]/.test(s[j])) {
-        while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
-        tokens.push({t:'cmd', v:s.slice(i+1,j)});
-      } else {
-        tokens.push({t:'cmd', v:s[j]}); j++;
-      }
-      i = j;
-    } else if (s[i] === '{') { tokens.push({t:'lbrace'}); i++; }
-    else if (s[i] === '}') { tokens.push({t:'rbrace'}); i++; }
-    else if (s[i] === '^') { tokens.push({t:'sup'}); i++; }
-    else if (s[i] === '_') { tokens.push({t:'sub'}); i++; }
-    else if (s[i] === '&') { tokens.push({t:'amp'}); i++; }
-    else if (s[i] === '\n' || s[i] === '\r') { i++; }
-    else if (/\s/.test(s[i])) { i++; }
-    else { tokens.push({t:'char', v:s[i]}); i++; }
-  }
-  return tokens;
-}
-
-function createParser(toks) {
-  let p = 0;
-
-  function peek() { return toks[p]; }
-  function consume() { return toks[p++]; }
-
-  function collectArgToks() {
-    if (!peek()) return [];
-    if (peek().t === 'lbrace') {
-      consume();
-      const out = [];
-      let d = 0;
-      while (p < toks.length) {
-        const t = toks[p];
-        if (t.t === 'rbrace' && d === 0) { p++; break; }
-        if (t.t === 'lbrace') d++;
-        if (t.t === 'rbrace') d--;
-        out.push(t); p++;
-      }
-      return out;
-    }
-    // single token
-    return [consume()];
-  }
-
-  function parseArgToks() { return parseSubTokens(collectArgToks()); }
-
-  function parseSubTokens(subToks) {
-    if (!subToks || subToks.length === 0) return '';
-    return createParser(subToks).parseAll();
-  }
-
-  function handleCmd(cmd) {
-    const MATH_FUNCS = ['sin','cos','tan','cot','sec','csc','arcsin','arccos','arctan',
-                        'log','ln','exp','max','min','limsup','liminf',
-                        'det','ker','dim','deg','Pr','hom','arg'];
-    if (MATH_FUNCS.includes(cmd)) return ommlRun(cmd, true);
-
-    // \lim, \sup, \inf — render as limLow if followed by _
-    if (cmd === 'lim' || cmd === 'sup' || cmd === 'inf') {
-      const funcRun = ommlRun(cmd, true);
-      if (peek() && peek().t === 'sub') {
-        consume();
-        const limArg = parseArgToks();
-        return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${funcRun}</m:e><m:lim>${limArg}</m:lim></m:limLow>`;
-      }
-      return funcRun;
-    }
-
-    // \sum, \prod — nary with sub/sup limits
-    if (cmd === 'sum' || cmd === 'prod' || cmd === 'int' || cmd === 'iint' || cmd === 'iiint' || cmd === 'oint') {
-      const chrMap = {sum:'∑', prod:'∏', int:'∫', iint:'∬', iiint:'∭', oint:'∮'};
-      const limLocMap = {sum:'undOvr', prod:'undOvr', int:'subSup', iint:'subSup', iiint:'subSup', oint:'subSup'};
-      const chr = chrMap[cmd];
-      const limLoc = limLocMap[cmd];
-      let subXml = '', supXml = '';
-      // collect optional _ and ^ in any order
-      for (let k = 0; k < 2; k++) {
-        if (peek() && peek().t === 'sub') { consume(); subXml = parseArgToks(); }
-        else if (peek() && peek().t === 'sup') { consume(); supXml = parseArgToks(); }
-        else break;
-      }
-      const subEl = subXml ? `<m:sub>${subXml}</m:sub>` : `<m:sub/>`;
-      const supEl = supXml ? `<m:sup>${supXml}</m:sup>` : `<m:sup/>`;
-      return `<m:nary><m:naryPr><m:chr m:val="${chr}"/><m:limLoc m:val="${limLoc}"/><m:ctrlPr/></m:naryPr>${subEl}${supEl}<m:e></m:e></m:nary>`;
-    }
-
-    if (cmd === 'frac' || cmd === 'tfrac' || cmd === 'dfrac') {
-      const num = parseArgToks();
-      const den = parseArgToks();
-      return `<m:f><m:fPr><m:ctrlPr/></m:fPr><m:num>${num}</m:num><m:den>${den}</m:den></m:f>`;
-    }
-
-    if (cmd === 'sqrt') {
-      // optional degree [n]
-      if (peek() && peek().t === 'char' && peek().v === '[') {
-        consume();
-        const degToks = [];
-        while (peek() && !(peek().t === 'char' && peek().v === ']')) degToks.push(consume());
-        if (peek()) consume();
-        const deg = parseSubTokens(degToks);
-        const base = parseArgToks();
-        return `<m:rad><m:radPr><m:ctrlPr/></m:radPr><m:deg>${deg}</m:deg><m:e>${base}</m:e></m:rad>`;
-      }
-      const base = parseArgToks();
-      return `<m:rad><m:radPr><m:degHide m:val="1"/><m:ctrlPr/></m:radPr><m:deg></m:deg><m:e>${base}</m:e></m:rad>`;
-    }
-
-    if (cmd === 'binom') {
-      const top = parseArgToks();
-      const bot = parseArgToks();
-      return `<m:d><m:dPr><m:begChr m:val="("/><m:endChr m:val=")"/><m:ctrlPr/></m:dPr><m:e><m:m><m:mPr><m:mcs><m:mc><m:mcPr><m:count m:val="1"/><m:mcJc m:val="center"/></m:mcPr></m:mc></m:mcs><m:ctrlPr/></m:mPr><m:mr><m:e>${top}</m:e></m:mr><m:mr><m:e>${bot}</m:e></m:mr></m:m></m:e></m:d>`;
-    }
-
-    if (cmd === 'text' || cmd === 'textrm' || cmd === 'textbf' || cmd === 'textit') {
-      const argToks = collectArgToks();
-      // Resolve any LaTeX symbol commands inside \text{} (e.g. \Omega, \mu, \cdot)
-      const plain = argToks.map(t => {
-        if (t.t === 'cmd') return SYMBOL_MAP[t.v] || t.v;
-        return t.v || '';
-      }).join('');
-      return ommlRun(plain, true);
-    }
-
-    if (cmd === 'mathbf' || cmd === 'boldsymbol') {
-      const inner = parseArgToks();
-      return inner;
-    }
-    if (cmd === 'mathrm' || cmd === 'mathit' || cmd === 'mathbb' || cmd === 'mathcal' || cmd === 'mathsf') {
-      return parseArgToks();
-    }
-
-    if (cmd === 'overline' || cmd === 'bar') {
-      const inner = parseArgToks();
-      return `<m:bar><m:barPr><m:pos m:val="top"/><m:ctrlPr/></m:barPr><m:e>${inner}</m:e></m:bar>`;
-    }
-    if (cmd === 'underline') {
-      const inner = parseArgToks();
-      return `<m:bar><m:barPr><m:pos m:val="bot"/><m:ctrlPr/></m:barPr><m:e>${inner}</m:e></m:bar>`;
-    }
-    if (cmd === 'overbrace') {
-      const inner = parseArgToks();
-      return `<m:limUpp><m:limUppPr><m:ctrlPr/></m:limUppPr><m:e>${inner}</m:e><m:lim>${ommlRun('⏞',false)}</m:lim></m:limUpp>`;
-    }
-    if (cmd === 'underbrace') {
-      const inner = parseArgToks();
-      return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${inner}</m:e><m:lim>${ommlRun('⏟',false)}</m:lim></m:limLow>`;
-    }
-
-    if (cmd === 'hat') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̂"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'tilde') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̃"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'dot') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̇"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'ddot') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̈"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'vec') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="⃗"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'widehat') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̂"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-    if (cmd === 'widetilde') {
-      const inner = parseArgToks();
-      return `<m:acc><m:accPr><m:chr m:val="̃"/><m:ctrlPr/></m:accPr><m:e>${inner}</m:e></m:acc>`;
-    }
-
-    if (cmd === 'underset' || cmd === 'overset') {
-      const over = parseArgToks();
-      const base = parseArgToks();
-      if (cmd === 'overset') return `<m:limUpp><m:limUppPr><m:ctrlPr/></m:limUppPr><m:e>${base}</m:e><m:lim>${over}</m:lim></m:limUpp>`;
-      return `<m:limLow><m:limLowPr><m:ctrlPr/></m:limLowPr><m:e>${base}</m:e><m:lim>${over}</m:lim></m:limLow>`;
-    }
-
-    if (cmd === 'boxed') {
-      const inner = parseArgToks();
-      // OMML border box wrapping the inner expression
-      return `<m:borderBox><m:borderBoxPr><m:ctrlPr/></m:borderBoxPr><m:e>${inner}</m:e></m:borderBox>`;
-    }
-
-    if (cmd === 'left') return parseDelimited();
-    if (cmd === 'right') return '';
-    if (cmd === 'begin') return parseEnvironment();
-    if (cmd === 'end') { collectArgToks(); return ''; }
-    if (cmd === 'hline') return ''; // silently skip table rules
-
-    // spacing
-    if (cmd === 'quad') return ommlRun('\u2003');
-    if (cmd === 'qquad') return ommlRun('\u2003\u2003');
-    if (cmd === ',') return ommlRun('\u2009');
-    if (cmd === '!') return '';
-    if (cmd === ';') return ommlRun('\u2004');
-    if (cmd === ':') return ommlRun('\u2005');
-    if (cmd === ' ') return ommlRun(' ');
-    if (cmd === '\\') return '';
-    if (cmd === 'newline') return '';
-
-    // special chars
-    if (cmd === '{') return ommlRun('{');
-    if (cmd === '}') return ommlRun('}');
-    if (cmd === '|') return ommlRun('‖', true);
-    if (cmd === 'vert') return ommlRun('|', true);
-    if (cmd === 'langle') return ommlRun('⟨', true);
-    if (cmd === 'rangle') return ommlRun('⟩', true);
-    if (cmd === 'lfloor') return ommlRun('⌊', true);
-    if (cmd === 'rfloor') return ommlRun('⌋', true);
-    if (cmd === 'lceil') return ommlRun('⌈', true);
-    if (cmd === 'rceil') return ommlRun('⌉', true);
-    if (cmd === 'pm') return ommlRun('±', true);
-    if (cmd === 'mp') return ommlRun('∓', true);
-    if (cmd === 'not') return ommlRun('¬', true);
-
-    // big delimiters — treat like normal bracket chars
-    if (['big','Big','bigg','Bigg','bigl','Bigr','biggl','Biggr','bigr','bigl'].includes(cmd)) return '';
-
-    const sym = SYMBOL_MAP[cmd];
-    if (sym) {
-      const OP_SYMS = '+-=<>.,;:|!∑∏∫∬∭∮⇒⇐⇔→←↔±∓×÷·∥≤≥≠≈≡∼∈∉⊂⊃∪∩∂∇∀∃';
-      return ommlRun(sym, OP_SYMS.includes(sym));
-    }
-
-    // unknown — render as upright text
-    return ommlRun(cmd, true);
-  }
-
-  function parseDelimited() {
-    let openBr = '(', closeBr = ')';
-    const nt = peek();
-    if (nt) {
-      if (nt.t === 'char') { openBr = nt.v; consume(); }
-      else if (nt.t === 'cmd') {
-        const c = nt.v; consume();
-        openBr = BRACKET_MAP[c] !== undefined ? BRACKET_MAP[c] : c;
-      }
-    }
-    const contentToks = [];
-    let depth = 0;
-    while (p < toks.length) {
-      const t = toks[p];
-      if (t.t === 'cmd' && t.v === 'left') depth++;
-      if (t.t === 'cmd' && t.v === 'right') { if (depth === 0) { p++; break; } depth--; }
-      contentToks.push(t); p++;
-    }
-    const ct = peek();
-    if (ct) {
-      if (ct.t === 'char') { closeBr = ct.v; consume(); }
-      else if (ct.t === 'cmd') { const c2 = ct.v; consume(); closeBr = BRACKET_MAP[c2] !== undefined ? BRACKET_MAP[c2] : c2; }
-    }
-    const inner = parseSubTokens(contentToks);
-    const bAttr = openBr ? `<m:begChr m:val="${escXml(openBr)}"/>` : `<m:begChr m:val=""/>`;
-    const eAttr = closeBr ? `<m:endChr m:val="${escXml(closeBr)}"/>` : `<m:endChr m:val=""/>`;
-    return `<m:d><m:dPr>${bAttr}${eAttr}<m:grow/><m:ctrlPr/></m:dPr><m:e>${inner}</m:e></m:d>`;
-  }
-
-  function parseEnvironment() {
-    const envToks = collectArgToks();
-    const envName = envToks.map(t => t.v || '').join('').trim();
-    if (['matrix','pmatrix','bmatrix','vmatrix','Vmatrix','Bmatrix','cases','smallmatrix'].includes(envName)) {
-      return parseMatrix(envName);
-    }
-    if (['align','align*','aligned','gather','gather*','gathered','multline','multline*','equation','equation*'].includes(envName)) {
-      return parseAligned();
-    }
-    return '';
-  }
-
-  function parseMatrix(envName) {
-    const brkMap = {
-      pmatrix:['(',')'], bmatrix:['[',']'], vmatrix:['|','|'],
-      Vmatrix:['‖','‖'], Bmatrix:['{','}'], matrix:['',''], cases:['{',''], smallmatrix:['','']
-    };
-    const [beg, end] = brkMap[envName] || ['',''];
-    const rows = []; let cr = []; let cc = [];
-    while (p < toks.length) {
-      const t = toks[p];
-      if (t.t === 'cmd' && t.v === 'end') { p++; collectArgToks(); break; }
-      if (t.t === 'cmd' && t.v === '\\') { cr.push(cc); cc=[]; rows.push(cr); cr=[]; p++; continue; }
-      if (t.t === 'amp') { cr.push(cc); cc=[]; p++; continue; }
-      cc.push(t); p++;
-    }
-    if (cc.length) cr.push(cc);
-    if (cr.length) rows.push(cr);
-    const mCols = Math.max(...rows.map(r => r.length), 1);
-    const mrXml = rows.map(row => {
-      const cells = row.map(cell => `<m:e>${parseSubTokens(cell)}</m:e>`).join('');
-      return `<m:mr>${cells}</m:mr>`;
-    }).join('');
-    const colDefs = `<m:mcs>${Array(mCols).fill(0).map(()=>'<m:mc><m:mcPr><m:count m:val="1"/><m:mcJc m:val="center"/></m:mcPr></m:mc>').join('')}</m:mcs>`;
-    const mXml = `<m:m><m:mPr>${colDefs}<m:ctrlPr/></m:mPr>${mrXml}</m:m>`;
-    if (!beg && !end) return mXml;
-    return `<m:d><m:dPr><m:begChr m:val="${escXml(beg)}"/><m:endChr m:val="${escXml(end)}"/><m:ctrlPr/></m:dPr><m:e>${mXml}</m:e></m:d>`;
-  }
-
-  function parseAligned() {
-    const rows = []; let cr = []; let cc = [];
-    while (p < toks.length) {
-      const t = toks[p];
-      if (t.t === 'cmd' && t.v === 'end') { p++; collectArgToks(); break; }
-      if (t.t === 'cmd' && t.v === '\\') { cr.push(cc); cc=[]; rows.push(cr); cr=[]; p++; continue; }
-      if (t.t === 'amp') { cr.push(cc); cc=[]; p++; continue; }
-      cc.push(t); p++;
-    }
-    if (cc.length) cr.push(cc);
-    if (cr.length) rows.push(cr);
-    return rows.map(row => row.map(cell => parseSubTokens(cell)).join('')).join('');
-  }
-
-  function parseAll() {
-    const parts = [];
-    while (p < toks.length) {
-      const tok = peek();
-      if (!tok || tok.t === 'rbrace') break;
-      if (tok.t === 'amp') { consume(); continue; }
-
-      if (tok.t === 'sub' || tok.t === 'sup') {
-        consume();
-        const script = parseArgToks();
-        if (parts.length > 0) {
-          const last = parts[parts.length - 1];
-          if (tok.t === 'sub') last.sub = (last.sub || '') + script;
-          else last.sup = (last.sup || '') + script;
-        } else {
-          parts.push(tok.t === 'sub' ? {base:'', sub:script, sup:null} : {base:'', sub:null, sup:script});
-        }
-        continue;
-      }
-
-      let base = '';
-      if (tok.t === 'lbrace') {
-        consume();
-        const subToks = [];
-        let d = 0;
-        while (p < toks.length) {
-          const t = toks[p];
-          if (t.t === 'rbrace' && d === 0) { p++; break; }
-          if (t.t === 'lbrace') d++;
-          if (t.t === 'rbrace') d--;
-          subToks.push(t); p++;
-        }
-        base = parseSubTokens(subToks);
-      } else if (tok.t === 'cmd') {
-        consume();
-        base = handleCmd(tok.v);
-      } else if (tok.t === 'char') {
-        consume();
-        const v = tok.v;
-        const isOp = '+-=<>.,;:|!'.includes(v);
-        base = ommlRun(v, isOp);
-      } else { consume(); continue; }
-
-      parts.push({base, sub:null, sup:null});
-    }
-
-    let out = '';
-    for (const pt of parts) {
-      if (pt.sub && pt.sup) {
-        out += `<m:sSubSup><m:sSubSupPr><m:ctrlPr/></m:sSubSupPr><m:e>${pt.base}</m:e><m:sub>${pt.sub}</m:sub><m:sup>${pt.sup}</m:sup></m:sSubSup>`;
-      } else if (pt.sub) {
-        out += `<m:sSub><m:sSubPr><m:ctrlPr/></m:sSubPr><m:e>${pt.base}</m:e><m:sub>${pt.sub}</m:sub></m:sSub>`;
-      } else if (pt.sup) {
-        out += `<m:sSup><m:sSupPr><m:ctrlPr/></m:sSupPr><m:e>${pt.base}</m:e><m:sup>${pt.sup}</m:sup></m:sSup>`;
-      } else {
-        out += pt.base;
-      }
-    }
-    return out;
-  }
-
-  return { parseAll };
-}
-
-function latexToOmml(latex) {
-  const tokens = lexLatex(latex.trim());
-  const body = createParser(tokens).parseAll();
-  return `<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:oMathParaPr><m:jc m:val="center"/></m:oMathParaPr><m:oMath>${body}</m:oMath></m:oMathPara>`;
-}
-
-// ─── DOCX Export via raw XML + JSZip ─────────────────────────────────────────
-let jsZipLoaded = false;
+function escXml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
 
 async function ensureJSZip() {
   if (window.JSZip) return;
@@ -948,16 +600,474 @@ async function ensureJSZip() {
   });
 }
 
-function buildDocumentXml(tokens, title) {
-  const ns = [
-    'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"',
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"',
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
-    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"',
-    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
-    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"',
-    'mc:Ignorable="w14"'
-  ].join(' ');
+// ── LaTeX → OMML (Office Math Markup Language) converter ─────────────────────
+// Converts a LaTeX string into native Word math XML (fully editable in Word).
+const M = 'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"';
+
+function latexToOmml(latex) {
+  // Tokenize and parse LaTeX into OMML XML string
+  try {
+    const omml = parseLatexExpr(latex.trim());
+    return `<m:oMath ${M}>${omml}</m:oMath>`;
+  } catch(e) {
+    // Fallback: render as plain text run if parsing fails
+    return `<m:oMath ${M}><m:r><m:t>${escXml(latex)}</m:t></m:r></m:oMath>`;
+  }
+}
+
+// ── Core parser ───────────────────────────────────────────────────────────────
+function parseLatexExpr(s) {
+  // Handle multiple lines (multi-line equations joined with \\ or newlines)
+  // Split on \\ or newlines → each line becomes a separate row in m:eqArr if multiple
+  const lines = s.split(/\\\\|\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length > 1) {
+    const rows = lines.map(l => `<m:e>${parseLatexLine(l)}</m:e>`).join('');
+    return `<m:eqArr><m:eqArrPr><m:baseJc m:val="center"/></m:eqArrPr>${rows}</m:eqArr>`;
+  }
+  return parseLatexLine(s.trim());
+}
+
+function parseLatexLine(s) {
+  // Split on \quad, \qquad, spacing commands → sequence of elements
+  const parts = splitTopLevel(s);
+  return parts.map(p => parseSingleExpr(p.trim())).join('');
+}
+
+function splitTopLevel(s) {
+  // Split on top-level commas and spacing to get sequence of math atoms
+  // We don't split on commas inside braces
+  const result = [];
+  let depth = 0, cur = '', i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === '{') { depth++; cur += ch; i++; }
+    else if (ch === '}') { depth--; cur += ch; i++; }
+    else if (depth === 0 && s.slice(i).match(/^\\(?:quad|qquad|,|;|:|!|\s)/)) {
+      if (cur.trim()) result.push(cur.trim());
+      // skip the spacing command
+      const m = s.slice(i).match(/^\\(?:quad|qquad|,|;|:|!|\s)/);
+      i += m[0].length; cur = '';
+    } else {
+      cur += ch; i++;
+    }
+  }
+  if (cur.trim()) result.push(cur.trim());
+  return result.length ? result : [s];
+}
+
+function parseSingleExpr(s) {
+  if (!s) return '';
+  // Handle sequences (implicit multiplication / juxtaposition)
+  // We parse token by token
+  const tokens = tokenizeLatex(s);
+  return buildOmml(tokens);
+}
+
+// ── Tokenizer ─────────────────────────────────────────────────────────────────
+function tokenizeLatex(s) {
+  const tokens = [];
+  let i = 0;
+  while (i < s.length) {
+    // Skip whitespace
+    if (/\s/.test(s[i])) { i++; continue; }
+    // LaTeX command
+    if (s[i] === '\\') {
+      let cmd = '\\';
+      i++;
+      if (i < s.length && /[a-zA-Z]/.test(s[i])) {
+        while (i < s.length && /[a-zA-Z]/.test(s[i])) { cmd += s[i]; i++; }
+        // skip trailing space after command
+        if (i < s.length && s[i] === ' ') i++;
+      } else if (i < s.length) {
+        cmd += s[i]; i++;
+      }
+      tokens.push({type:'cmd', val:cmd});
+    }
+    // Braced group
+    else if (s[i] === '{') {
+      const end = matchBrace(s, i);
+      tokens.push({type:'group', val:s.slice(i+1, end)});
+      i = end + 1;
+    }
+    // Superscript / subscript
+    else if (s[i] === '^' || s[i] === '_') {
+      tokens.push({type:'script', val:s[i]}); i++;
+    }
+    // Single char
+    else {
+      tokens.push({type:'char', val:s[i]}); i++;
+    }
+  }
+  return tokens;
+}
+
+function matchBrace(s, start) {
+  let depth = 0, i = start;
+  while (i < s.length) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') { depth--; if (depth === 0) return i; }
+    i++;
+  }
+  return s.length - 1;
+}
+
+// ── OMML builder ─────────────────────────────────────────────────────────────
+function buildOmml(tokens) {
+  let out = '';
+  let i = 0;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+
+    // Handle fractions: \frac{num}{den}
+    if (tok.type === 'cmd' && tok.val === '\\frac') {
+      const numTok = tokens[i+1];
+      const denTok = tokens[i+2];
+      if (numTok && denTok) {
+        const num = getGroupContent(numTok);
+        const den = getGroupContent(denTok);
+        out += `<m:f><m:num><m:r><m:t>${escXml('')}</m:t></m:r>${parseLatexLine(num)}</m:num>`
+             + `<m:den><m:r><m:t>${escXml('')}</m:t></m:r>${parseLatexLine(den)}</m:den></m:f>`;
+        i += 3; continue;
+      }
+    }
+
+    // \tfrac same as \frac
+    if (tok.type === 'cmd' && tok.val === '\\tfrac') {
+      const numTok = tokens[i+1];
+      const denTok = tokens[i+2];
+      if (numTok && denTok) {
+        const num = getGroupContent(numTok);
+        const den = getGroupContent(denTok);
+        out += `<m:f><m:fPr><m:type m:val="skw"/></m:fPr><m:num>${parseLatexLine(num)}</m:num>`
+             + `<m:den>${parseLatexLine(den)}</m:den></m:f>`;
+        i += 3; continue;
+      }
+    }
+
+    // \dfrac
+    if (tok.type === 'cmd' && tok.val === '\\dfrac') {
+      const numTok = tokens[i+1];
+      const denTok = tokens[i+2];
+      if (numTok && denTok) {
+        const num = getGroupContent(numTok);
+        const den = getGroupContent(denTok);
+        out += `<m:f><m:num>${parseLatexLine(num)}</m:num><m:den>${parseLatexLine(den)}</m:den></m:f>`;
+        i += 3; continue;
+      }
+    }
+
+    // \sqrt[n]{x} or \sqrt{x}
+    if (tok.type === 'cmd' && tok.val === '\\sqrt') {
+      let degContent = null;
+      let nextIdx = i + 1;
+      // Check for optional [n]
+      if (nextIdx < tokens.length && tokens[nextIdx].type === 'char' && tokens[nextIdx].val === '[') {
+        // find closing ]
+        let j = nextIdx + 1, deg = '';
+        while (j < tokens.length && !(tokens[j].type === 'char' && tokens[j].val === ']')) {
+          deg += getRawVal(tokens[j]); j++;
+        }
+        degContent = deg; nextIdx = j + 1;
+      }
+      const radTok = tokens[nextIdx];
+      const radContent = radTok ? getGroupContent(radTok) : '';
+      if (degContent) {
+        out += `<m:rad><m:radPr><m:degHide m:val="0"/></m:radPr>`
+             + `<m:deg>${parseLatexLine(degContent)}</m:deg>`
+             + `<m:e>${parseLatexLine(radContent)}</m:e></m:rad>`;
+      } else {
+        out += `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr>`
+             + `<m:deg/><m:e>${parseLatexLine(radContent)}</m:e></m:rad>`;
+      }
+      i = nextIdx + 1; continue;
+    }
+
+    // \sum, \prod, \int with limits
+    if (tok.type === 'cmd' && (tok.val === '\\sum' || tok.val === '\\prod' || tok.val === '\\int' || tok.val === '\\oint')) {
+      const nAry = { '\\sum':'∑', '\\prod':'∏', '\\int':'∫', '\\oint':'∮' }[tok.val];
+      let subContent = '', supContent = '';
+      let j = i + 1;
+      while (j < tokens.length) {
+        if (tokens[j].type === 'script' && tokens[j].val === '_' && tokens[j+1]) {
+          subContent = getGroupContent(tokens[j+1]); j += 2;
+        } else if (tokens[j].type === 'script' && tokens[j].val === '^' && tokens[j+1]) {
+          supContent = getGroupContent(tokens[j+1]); j += 2;
+        } else break;
+      }
+      const limLoc = tok.val === '\\int' || tok.val === '\\oint' ? 'subSup' : 'undOvr';
+      out += `<m:nary><m:naryPr><m:chr m:val="${nAry}"/><m:limLoc m:val="${limLoc}"/>`
+           + `<m:subHide m:val="${subContent?'0':'1'}"/><m:supHide m:val="${supContent?'0':'1'}"/></m:naryPr>`
+           + `<m:sub>${subContent ? parseLatexLine(subContent) : ''}</m:sub>`
+           + `<m:sup>${supContent ? parseLatexLine(supContent) : ''}</m:sup>`
+           + `<m:e><m:r><m:t> </m:t></m:r></m:e></m:nary>`;
+      i = j; continue;
+    }
+
+    // \lim, \max, \min, \log, \ln, \sin, \cos, \tan, \tan^{-1} etc.
+    if (tok.type === 'cmd' && /^\\(lim|max|min|log|ln|sin|cos|tan|cot|sec|csc|exp|det|deg|arg|Re|Im)$/.test(tok.val)) {
+      const fname = tok.val.slice(1);
+      // Check for subscript (e.g. \lim_{x \to 0})
+      let subContent = '';
+      if (tokens[i+1] && tokens[i+1].type === 'script' && tokens[i+1].val === '_' && tokens[i+2]) {
+        subContent = getGroupContent(tokens[i+2]); i += 2;
+      }
+      if (subContent) {
+        out += `<m:func><m:funcPr/><m:fName><m:limLow>`
+             + `<m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>${escXml(fname)}</m:t></m:r></m:e>`
+             + `<m:lim>${parseLatexLine(subContent)}</m:lim></m:limLow></m:fName>`
+             + `<m:e><m:r><m:t> </m:t></m:r></m:e></m:func>`;
+      } else {
+        out += `<m:func><m:funcPr/><m:fName><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>${escXml(fname)}</m:t></m:r></m:fName>`
+             + `<m:e><m:r><m:t> </m:t></m:r></m:e></m:func>`;
+      }
+      i++; continue;
+    }
+
+    // \text{...}
+    if (tok.type === 'cmd' && tok.val === '\\text') {
+      const grp = tokens[i+1];
+      const txt = grp ? getGroupContent(grp) : '';
+      out += `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">${escXml(txt)}</m:t></m:r>`;
+      i += grp ? 2 : 1; continue;
+    }
+
+    // \mathbf, \boldsymbol, \mathit, \mathrm, \mathcal, \mathbb
+    if (tok.type === 'cmd' && /^\\(mathbf|boldsymbol|mathit|mathrm|mathcal|mathbb|mathsf|mathtt)$/.test(tok.val)) {
+      const sty = { '\\mathbf':'b','\\boldsymbol':'b','\\mathit':'i','\\mathrm':'p','\\mathcal':'b-i','\\mathbb':'b','\\mathsf':'p','\\mathtt':'p' }[tok.val] || 'i';
+      const grp = tokens[i+1];
+      const content = grp ? getGroupContent(grp) : '';
+      out += `<m:r><m:rPr><m:sty m:val="${sty}"/></m:rPr><m:t>${escXml(content)}</m:t></m:r>`;
+      i += grp ? 2 : 1; continue;
+    }
+
+    // \overline{}, \underline{}, \hat{}, \tilde{}, \bar{}, \vec{}, \dot{}, \ddot{}
+    if (tok.type === 'cmd' && /^\\(overline|underline|hat|tilde|bar|vec|dot|ddot|widehat|widetilde)$/.test(tok.val)) {
+      const accMap = {
+        '\\hat':'̂','\\tilde':'̃','\\bar':'̄','\\vec':'⃗','\\dot':'̇','\\ddot':'̈',
+        '\\widehat':'̂','\\widetilde':'̃'
+      };
+      const grp = tokens[i+1];
+      const content = grp ? getGroupContent(grp) : '';
+      if (tok.val === '\\overline') {
+        out += `<m:bar><m:barPr><m:pos m:val="top"/></m:barPr><m:e>${parseLatexLine(content)}</m:e></m:bar>`;
+      } else if (tok.val === '\\underline') {
+        out += `<m:bar><m:barPr><m:pos m:val="bot"/></m:barPr><m:e>${parseLatexLine(content)}</m:e></m:bar>`;
+      } else if (accMap[tok.val]) {
+        out += `<m:acc><m:accPr><m:chr m:val="${accMap[tok.val]}"/></m:accPr><m:e>${parseLatexLine(content)}</m:e></m:acc>`;
+      } else {
+        out += parseLatexLine(content);
+      }
+      i += grp ? 2 : 1; continue;
+    }
+
+    // \overbrace{} \underbrace{}
+    if (tok.type === 'cmd' && (tok.val === '\\overbrace' || tok.val === '\\underbrace')) {
+      const grp = tokens[i+1];
+      const content = grp ? getGroupContent(grp) : '';
+      const pos = tok.val === '\\overbrace' ? 'top' : 'bot';
+      out += `<m:groupChr><m:groupChrPr><m:pos m:val="${pos}"/></m:groupChrPr><m:e>${parseLatexLine(content)}</m:e></m:groupChr>`;
+      i += grp ? 2 : 1; continue;
+    }
+
+    // \underset{sub}{base} \overset{sup}{base}
+    if (tok.type === 'cmd' && (tok.val === '\\underset' || tok.val === '\\overset')) {
+      const t1 = tokens[i+1], t2 = tokens[i+2];
+      const c1 = t1 ? getGroupContent(t1) : '', c2 = t2 ? getGroupContent(t2) : '';
+      if (tok.val === '\\underset') {
+        out += `<m:limLow><m:e>${parseLatexLine(c2)}</m:e><m:lim>${parseLatexLine(c1)}</m:lim></m:limLow>`;
+      } else {
+        out += `<m:limUpp><m:e>${parseLatexLine(c2)}</m:e><m:lim>${parseLatexLine(c1)}</m:lim></m:limUpp>`;
+      }
+      i += (t1 && t2) ? 3 : 1; continue;
+    }
+
+    // \left ... \right delimiters
+    if (tok.type === 'cmd' && tok.val === '\\left') {
+      // collect everything until matching \right
+      const delim = tokens[i+1] ? getDelimChar(tokens[i+1]) : '(';
+      let j = i + 2, depth2 = 1, inner = [];
+      while (j < tokens.length && depth2 > 0) {
+        if (tokens[j].type === 'cmd' && tokens[j].val === '\\left') depth2++;
+        if (tokens[j].type === 'cmd' && tokens[j].val === '\\right') { depth2--; if (!depth2) break; }
+        inner.push(tokens[j]); j++;
+      }
+      const closeDelim = tokens[j+1] ? getDelimChar(tokens[j+1]) : ')';
+      const innerOmml = buildOmml(inner);
+      out += `<m:d><m:dPr><m:begChr m:val="${escXml(delim)}"/><m:endChr m:val="${escXml(closeDelim)}"/></m:dPr>`
+           + `<m:e>${innerOmml}</m:e></m:d>`;
+      i = j + 2; continue;
+    }
+
+    // Skip \right (handled by \left)
+    if (tok.type === 'cmd' && tok.val === '\\right') { i += 2; continue; }
+
+    // Skip \left. \right. (invisible delimiters)
+    if (tok.type === 'cmd' && (tok.val === '\\left.' || tok.val === '\\right.')) { i++; continue; }
+
+    // \underbrace, \overbrace with limits already handled above
+
+    // \to, \rightarrow, \leftarrow etc as operators
+    if (tok.type === 'cmd') {
+      const symMap = {
+        '\\alpha':'α','\\beta':'β','\\gamma':'γ','\\delta':'δ','\\epsilon':'ε',
+        '\\varepsilon':'ε','\\zeta':'ζ','\\eta':'η','\\theta':'θ','\\vartheta':'ϑ',
+        '\\iota':'ι','\\kappa':'κ','\\lambda':'λ','\\mu':'μ','\\nu':'ν',
+        '\\xi':'ξ','\\pi':'π','\\varpi':'ϖ','\\rho':'ρ','\\varrho':'ϱ',
+        '\\sigma':'σ','\\varsigma':'ς','\\tau':'τ','\\upsilon':'υ','\\phi':'φ',
+        '\\varphi':'φ','\\chi':'χ','\\psi':'ψ','\\omega':'ω',
+        '\\Gamma':'Γ','\\Delta':'Δ','\\Theta':'Θ','\\Lambda':'Λ','\\Xi':'Ξ',
+        '\\Pi':'Π','\\Sigma':'Σ','\\Upsilon':'Υ','\\Phi':'Φ','\\Psi':'Ψ','\\Omega':'Ω',
+        '\\infty':'∞','\\partial':'∂','\\nabla':'∇','\\forall':'∀','\\exists':'∃',
+        '\\in':'∈','\\notin':'∉','\\subset':'⊂','\\supset':'⊃','\\cup':'∪','\\cap':'∩',
+        '\\leq':'≤','\\geq':'≥','\\neq':'≠','\\approx':'≈','\\equiv':'≡','\\sim':'∼',
+        '\\pm':'±','\\mp':'∓','\\times':'×','\\div':'÷','\\cdot':'·','\\circ':'∘',
+        '\\Rightarrow':'⇒','\\Leftarrow':'⇐','\\Leftrightarrow':'⇔',
+        '\\rightarrow':'→','\\leftarrow':'←','\\to':'→','\\gets':'←',
+        '\\uparrow':'↑','\\downarrow':'↓','\\leftrightarrow':'↔',
+        '\\angle':'∠','\\perp':'⊥','\\parallel':'∥',
+        '\\ldots':'…','\\cdots':'⋯','\\vdots':'⋮','\\ddots':'⋱',
+        '\\!':'','\\,':' ','\\;':' ','\\:':' ','\\ ':' ',
+        '\\{':'{','\\}':'}','\\|':'‖',
+        '\\Vert':'‖','\\vert':'|',
+        '\\lfloor':'⌊','\\rfloor':'⌋','\\lceil':'⌈','\\rceil':'⌉',
+        '\\langle':'⟨','\\rangle':'⟩',
+        '\\Re':'ℜ','\\Im':'ℑ',
+        '\\prime':'′',
+        '\\quad':' ','\\qquad':'  ',
+        '\\mp':'∓',
+        '\\ne':'≠','\\le':'≤','\\ge':'≥',
+        '\\not':'̸',
+      };
+      const sym = symMap[tok.val];
+      if (sym !== undefined) {
+        if (sym) out += `<m:r><m:t>${escXml(sym)}</m:t></m:r>`;
+        i++; continue;
+      }
+      // Unknown command — render as roman text
+      out += `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>${escXml(tok.val.slice(1))}</m:t></m:r>`;
+      i++; continue;
+    }
+
+    // Superscript ^ and subscript _
+    if (tok.type === 'script') {
+      const isSuper = tok.val === '^';
+      const base = out; out = '';
+      // Get the exponent/subscript token
+      const scriptTok = tokens[i+1];
+      const scriptContent = scriptTok ? getGroupContent(scriptTok) : '';
+
+      // Check if we also have the other script following
+      let hasSub = false, hasSup = false, subC = '', supC = '';
+      if (isSuper) {
+        supC = scriptContent;
+        if (tokens[i+2] && tokens[i+2].type === 'script' && tokens[i+2].val === '_' && tokens[i+3]) {
+          subC = getGroupContent(tokens[i+3]); hasSub = true;
+        }
+      } else {
+        subC = scriptContent;
+        if (tokens[i+2] && tokens[i+2].type === 'script' && tokens[i+2].val === '^' && tokens[i+3]) {
+          supC = getGroupContent(tokens[i+3]); hasSup = true;
+        }
+      }
+
+      // The base is whatever came before in this sequence
+      // We wrap base in <m:e>
+      if (isSuper && !hasSub) {
+        out = `<m:sSup><m:e>${base}</m:e><m:sup>${parseLatexLine(supC)}</m:sup></m:sSup>`;
+        i += scriptTok ? 2 : 1;
+      } else if (!isSuper && !hasSup) {
+        out = `<m:sSub><m:e>${base}</m:e><m:sub>${parseLatexLine(subC)}</m:sub></m:sSub>`;
+        i += scriptTok ? 2 : 1;
+      } else {
+        // Both sub and sup
+        const finalSub = isSuper ? subC : subC;
+        const finalSup = isSuper ? supC : supC;
+        out = `<m:sSubSup><m:e>${base}</m:e><m:sub>${parseLatexLine(finalSub)}</m:sub><m:sup>${parseLatexLine(finalSup)}</m:sup></m:sSubSup>`;
+        i += hasSub || hasSup ? 4 : 2;
+      }
+      continue;
+    }
+
+    // Braced group — recurse
+    if (tok.type === 'group') {
+      out += parseLatexLine(tok.val);
+      i++; continue;
+    }
+
+    // Plain character
+    if (tok.type === 'char') {
+      const ch = tok.val;
+      // Operators
+      if (/[+\-=<>\/!]/.test(ch)) {
+        out += `<m:r><m:t xml:space="preserve"> ${escXml(ch)} </m:t></m:r>`;
+      } else if (ch === ',') {
+        out += `<m:r><m:t xml:space="preserve">, </m:t></m:r>`;
+      } else if (ch === '.') {
+        out += `<m:r><m:t>.</m:t></m:r>`;
+      } else if (/[0-9]/.test(ch)) {
+        // Collect consecutive digits
+        let num = ch; let j2 = i + 1;
+        while (j2 < tokens.length && tokens[j2].type === 'char' && /[0-9.]/.test(tokens[j2].val)) {
+          num += tokens[j2].val; j2++;
+        }
+        out += `<m:r><m:t>${escXml(num)}</m:t></m:r>`;
+        i = j2; continue;
+      } else if (ch === '(' || ch === ')' || ch === '[' || ch === ']' || ch === '|') {
+        out += `<m:r><m:t>${escXml(ch)}</m:t></m:r>`;
+      } else {
+        // letter — italic by default for math
+        out += `<m:r><m:t>${escXml(ch)}</m:t></m:r>`;
+      }
+      i++; continue;
+    }
+
+    i++;
+  }
+  return out;
+}
+
+function getGroupContent(tok) {
+  if (!tok) return '';
+  if (tok.type === 'group') return tok.val;
+  if (tok.type === 'char') return tok.val;
+  if (tok.type === 'cmd') return tok.val;
+  return getRawVal(tok);
+}
+
+function getRawVal(tok) {
+  if (tok.type === 'group') return tok.val;
+  if (tok.type === 'cmd') return tok.val;
+  if (tok.type === 'char') return tok.val;
+  return '';
+}
+
+function getDelimChar(tok) {
+  if (!tok) return '(';
+  if (tok.type === 'char') return tok.val;
+  if (tok.type === 'cmd') {
+    const m = {
+      '\\{':'{','\\}':'}','\\|':'|','\\lvert':'|','\\rvert':'|',
+      '\\lfloor':'⌊','\\rfloor':'⌋','\\lceil':'⌈','\\rceil':'⌉',
+      '\\langle':'⟨','\\rangle':'⟩','\\vert':'|','\\Vert':'‖',
+      '.':''
+    };
+    return m[tok.val] || tok.val.replace('\\','');
+  }
+  return '(';
+}
+
+// ── DOCX export ───────────────────────────────────────────────────────────────
+async function exportDOCX() {
+  const raw = document.getElementById('input').value.trim();
+  if (!raw) { setStatus('Nothing to export — paste your reply first.'); return; }
+
+  setStatus('Building .docx with native editable equations…');
+
+  try { await ensureJSZip(); }
+  catch(e) { setStatus('Failed to load JSZip. Check your internet connection.'); return; }
+
+  const title = document.getElementById('docTitle').value || 'Document';
+  const tokens = tokenize(preprocessInput(raw));
 
   const SEC_HEX = {
     question:'185FA5', given:'0F6E56', formula:'854F0B',
@@ -972,12 +1082,45 @@ function buildDocumentXml(tokens, title) {
   function stripHTML(html) { const d=document.createElement('div'); d.innerHTML=html; return d.textContent||''; }
   function wx(s) { return escXml(s); }
 
+  // Inline text with possible inline math runs
+  function buildInlineRuns(html) {
+    // Parse inline \(...\) math inside text
+    let result = '';
+    const parts = html.split(/(\\\([\s\S]*?\\\))/g);
+    for (const part of parts) {
+      const mInline = part.match(/^\\\(([\s\S]*?)\\\)$/);
+      if (mInline) {
+        // Inline equation
+        const omml = latexToOmml(mInline[1]);
+        result += omml;
+      } else {
+        // Plain text
+        const txt = stripHTML(part);
+        if (txt) result += `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">${wx(txt)}</m:t></m:r>`;
+      }
+    }
+    return result;
+  }
+
+  const ns = [
+    'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"',
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"',
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"',
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"',
+    'mc:Ignorable="w14"'
+  ].join(' ');
+
   let body = '';
 
-  // Title
-  body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="320"/></w:pPr>`
-        + `<w:r><w:rPr><w:b/><w:sz w:val="36"/><w:szCs w:val="36"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
-        + `<w:t>${wx(title)}</w:t></w:r></w:p>`;
+  // Title paragraph
+  if (title) {
+    body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="320"/></w:pPr>`
+          + `<w:r><w:rPr><w:b/><w:sz w:val="36"/><w:szCs w:val="36"/>`
+          + `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr>`
+          + `<w:t>${wx(title)}</w:t></w:r></w:p>`;
+  }
 
   for (const tok of tokens) {
     if (tok.type === 'hr') {
@@ -989,64 +1132,64 @@ function buildDocumentXml(tokens, title) {
       body += `<w:p><w:pPr>`
             + `<w:pBdr><w:left w:val="single" w:sz="12" w:space="8" w:color="${hex}"/></w:pBdr>`
             + `<w:ind w:left="140"/><w:spacing w:before="280" w:after="100"/></w:pPr>`
-            + `<w:r><w:rPr><w:b/><w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="${hex}"/>`
-            + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
+            + `<w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="${hex}"/>`
+            + `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr>`
             + `<w:t>${wx(tok.text.toUpperCase())}</w:t></w:r></w:p>`;
 
     } else if (tok.type === 'eq') {
-      try {
-        const omml = latexToOmml(tok.latex);
-        // Strip the xmlns from the inner OMML since it's declared on w:document
-        const ommlClean = omml.replace(/xmlns:m="[^"]*"/g, '');
-        body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="120"/></w:pPr>`
-              + ommlClean + `</w:p>`;
-      } catch(e) {
-        body += `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>`
-              + `<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="22"/></w:rPr>`
-              + `<w:t>${wx(tok.latex)}</w:t></w:r></w:p>`;
-      }
+      // Native OMML display equation — fully editable in Word
+      const omml = latexToOmml(tok.latex);
+      body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="140" w:after="140"/></w:pPr>`
+            + `<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">`
+            + `<m:oMathParaPr><m:jc m:val="center"/></m:oMathParaPr>`
+            + omml
+            + `</m:oMathPara></w:p>`;
 
     } else if (tok.type === 'text') {
-      const plain = stripHTML(tok.html);
-      if (plain.trim()) {
-        body += `<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>`
-              + `<w:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/>`
-              + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
-              + `<w:t xml:space="preserve">${wx(plain)}</w:t></w:r></w:p>`;
+      // Check if this text has inline math
+      const hasInlineMath = tok.html.includes('\\(');
+      if (hasInlineMath) {
+        // Mixed text+math paragraph
+        body += `<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>`;
+        const parts = tok.html.split(/(\\\([\s\S]*?\\\))/g);
+        for (const part of parts) {
+          const mInline = part.match(/^\\\(([\s\S]*?)\\\)$/);
+          if (mInline) {
+            const omml = latexToOmml(mInline[1]);
+            body += omml;
+          } else {
+            const txt = stripHTML(part);
+            if (txt.trim()) {
+              body += `<w:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/>`
+                    + `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr>`
+                    + `<w:t xml:space="preserve">${wx(txt)}</w:t></w:r>`;
+            }
+          }
+        }
+        body += `</w:p>`;
+      } else {
+        const plain = stripHTML(tok.html);
+        if (plain.trim()) {
+          body += `<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>`
+                + `<w:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/>`
+                + `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr>`
+                + `<w:t xml:space="preserve">${wx(plain)}</w:t></w:r></w:p>`;
+        }
       }
     }
   }
 
-  // Footer
-  body += `<w:p><w:pPr><w:jc w:val="right"/><w:spacing w:before="400"/></w:pPr>`
-        + `<w:r><w:rPr><w:sz w:val="18"/><w:color w:val="BBBBBB"/>`
-        + `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>`
-        + `<w:t></w:t></w:r></w:p>`;
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    + `<w:document ${ns}><w:body>${body}`
+    + `<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>`
+    + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>`
+    + `</w:sectPr></w:body></w:document>`;
 
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-       + `<w:document ${ns}>`
-       + `<w:body>${body}`
-       + `<w:sectPr>`
-       + `<w:pgSz w:w="12240" w:h="15840"/>`
-       + `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>`
-       + `</w:sectPr></w:body></w:document>`;
-}
-
-async function exportDOCX() {
-  const raw = document.getElementById('input').value.trim();
-  if (!raw) { setStatus('Nothing to export — paste your reply first.'); return; }
-  setStatus('Building .docx with editable equations…');
-
-  try {
-    await ensureJSZip();
-  } catch(e) {
-    setStatus('Failed to load JSZip. Check your internet connection.');
-    return;
-  }
-
-  const title = document.getElementById('docTitle').value || 'Document';
-  const tokens = tokenize(preprocessInput(raw));
-  const documentXml = buildDocumentXml(tokens, title);
+  const wordRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+    + `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+    + `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>`
+    + `</Relationships>`;
 
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -1062,54 +1205,23 @@ async function exportDOCX() {
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
 
-  const wordRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
-</Relationships>`;
-
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
           xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
-  <w:docDefaults>
-    <w:rPrDefault>
-      <w:rPr>
-        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
-        <w:sz w:val="24"/>
-        <w:szCs w:val="24"/>
-      </w:rPr>
-    </w:rPrDefault>
-    <w:pPrDefault>
-      <w:pPr>
-        <w:spacing w:after="160" w:line="259" w:lineRule="auto"/>
-      </w:pPr>
-    </w:pPrDefault>
-  </w:docDefaults>
+  <w:docDefaults><w:rPrDefault><w:rPr>
+    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+    <w:sz w:val="24"/><w:szCs w:val="24"/>
+  </w:rPr></w:rPrDefault><w:pPrDefault><w:pPr>
+    <w:spacing w:after="160" w:line="276" w:lineRule="auto"/>
+  </w:pPr></w:pPrDefault></w:docDefaults>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-    <w:qFormat/>
+    <w:name w:val="Normal"/><w:qFormat/>
   </w:style>
 </w:styles>`;
 
   const settings = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
-  <m:mathPr>
-    <m:mathFont m:val="Cambria Math"/>
-    <m:brkBin m:val="before"/>
-    <m:brkBinSub m:val="--"/>
-    <m:smallFrac m:val="0"/>
-    <m:dispDef/>
-    <m:lMargin m:val="0"/>
-    <m:rMargin m:val="0"/>
-    <m:defJc m:val="centerGroup"/>
-    <m:wrapIndent m:val="1440"/>
-    <m:intLim m:val="subSup"/>
-    <m:naryLim m:val="undOvr"/>
-  </m:mathPr>
-  <w:compat>
-    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
-  </w:compat>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>
 </w:settings>`;
 
   const zip = new JSZip();
@@ -1121,10 +1233,9 @@ async function exportDOCX() {
   zip.file('word/settings.xml', settings);
 
   const blob = await zip.generateAsync({
-    type: 'blob',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 }
+    type:'blob',
+    mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    compression:'DEFLATE', compressionOptions:{level:6}
   });
 
   const url = URL.createObjectURL(blob);
@@ -1133,7 +1244,7 @@ async function exportDOCX() {
   a.download = fname + '.docx';
   a.click();
   URL.revokeObjectURL(url);
-  setStatus('✓ Downloaded ' + fname + '.docx — equations are fully editable in Word!');
+  setStatus(`✓ Downloaded ${fname}.docx — all equations are native Word math (fully editable)!`);
 }
 
 document.addEventListener('keydown', e => {
