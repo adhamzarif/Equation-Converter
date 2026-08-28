@@ -1,74 +1,57 @@
 # Equation-Converter
 
-A single-file, browser-based tool that converts math content (LaTeX, Unicode, or plain AI-generated text) into a live preview and exports it to **.docx**, **.html**, or **PDF** — with equations that remain **fully editable in Microsoft Word**.
+A single-file, browser-based tool that turns an AI chat reply — from ChatGPT, Gemini, DeepSeek or Claude — into a clean document, and exports it to **.docx**, **.html** or **PDF**, with equations that stay **fully editable in Microsoft Word**.
 
-No installation required. No server. Just open the URL in any modern browser.
+No installation. No server. Open the file in any modern browser.
 
 ---
 
 ## Features
 
-- **Live preview** — renders equations using MathJax as you type or paste
-- **Multiple input formats** — accepts LaTeX (`[...]`, `$$...$$`, `\[...\]`, `$...$`), Unicode math symbols, and plain AI-generated text
-- **Smart preprocessing** — automatically detects stacked Unicode fractions, section headers, Markdown headings (`###`), emoji-prefixed lines, and horizontal rules
-- **Color-coded sections** — recognizes named sections (Question, Given, Formula, Solution, Final Answer, Note) and styles each with a distinct color accent
-- **Three export formats:**
-  - `.docx` — Word document with native OMML equations (editable in Word, not images)
-  - `.html` — standalone HTML file with embedded MathJax (ready to open in Word or any browser)
-  - **PDF** — via the browser's print dialog
-- **Keyboard shortcut** — `Ctrl+Enter` (or `Cmd+Enter` on Mac) triggers the preview
-- **Custom document title** — set a title that appears as a heading in all exports
-- **Print-ready** — hides the editor UI when printing, showing only the document
+- **Live preview** — MathJax renders your equations as you type, with a short debounce
+- **Paste-and-go** — accepts a reply exactly as you copied it, without reformatting
+- **Every common math delimiter** — `$$...$$`, `\[...\]`, `$...$`, `\(...\)`, and bare `[` / `]` blocks for replies whose backslashes were stripped by Markdown
+- **LaTeX environments** — `aligned`, `align`, `gather`, `split`, `cases`, `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `array`
+- **Markdown** — headings, bold, italic, inline code, fenced code blocks, bullet and numbered lists, tables, dividers
+- **Colour-coded sections** — named sections (Question, Given, Formula, Solution, Final Answer, Note…) each get a distinct accent
+- **Unicode recovery** — if you paste already-rendered math (`x²`, `√5`, `≥`, `π`, `aₙ₊₁`, `½`), it is converted back to LaTeX
+- **Three exports:**
+  - `.docx` — native OMML equations, editable in Word's equation editor, not images
+  - `.html` — standalone file with embedded MathJax
+  - **PDF** — rendered in a new tab, then the print dialog opens on its own
+- **Keyboard shortcut** — `Ctrl+Enter` (`Cmd+Enter` on Mac) forces a preview
 
 ---
 
 ## Requirements
 
 - Any modern browser (Chrome, Firefox, Edge, Safari)
-- Internet connection (used to load MathJax and JSZip from CDN on first use)
-- Microsoft Word 2016 or later (to open and edit exported `.docx` equations)
+- An internet connection on first load — MathJax and JSZip come from a CDN
+- Microsoft Word 2016 or later to edit the exported equations
 
 ---
 
-## How to Use
+## How to use
 
 ### 1. Open the file
 
-Click the URL to open it in your browser. No installation or setup needed.
+Open `index.html` in your browser. Nothing to install.
 
-### 2. Set a document title *(optional)*
+### 2. Set a document title (optional)
 
-At the top of the page, there is a **Document title** field. Type your document name here (e.g., `Fourier Series — Problem Set 3`). This title will appear as a bold heading in all exported files.
+The **Document title** field at the top becomes a centred bold heading in every export, and supplies the filename. Leave it blank and the file is named `document`.
 
-### 3. Paste or type your content
+### 3. Paste the reply
 
-Click inside the **Input** panel on the left and paste your math content. The tool accepts several formats:
+Click into the **Input** panel and paste. All of these work, and you can mix them freely in one document:
 
-#### Format A — LaTeX blocks (recommended)
-
-Wrap each equation in square brackets `[` ... `]` on separate lines:
+**Display math**
 
 ```
-*Section Name*
-
-[
-\frac{1}{2} + \frac{\sqrt{3}}{4}
-]
-
-plain text goes here
-
----
+$$
+\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+$$
 ```
-
-#### Format B — Dollar-sign LaTeX (standard Markdown math)
-
-```
-$$\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}$$
-
-Inline math also works: $E = mc^2$
-```
-
-#### Format C — Backslash bracket display math
 
 ```
 \[
@@ -76,136 +59,120 @@ Inline math also works: $E = mc^2$
 \]
 ```
 
-#### Format D — Unicode math (copy-pasted from AI chat)
-
-If you paste output from an AI tool that uses Unicode symbols instead of LaTeX, the converter will automatically detect and convert them:
+**Inline math**
 
 ```
-α + β = γ
-∫ f(x) dx ≈ 0.5
+The identity $E = mc^2$ still holds, and so does \(a^2 + b^2 = c^2\).
 ```
 
-### 4. Use the formatting syntax
+**Environments** — write them as usual, either bare or inside `$$`:
+
+```
+$$
+\begin{cases}
+x + y = 2 \\
+x - y = 0
+\end{cases}
+$$
+```
+
+**Bare brackets** — when a reply loses its backslashes in copy-paste, a line containing only `[`, a body, and a line containing only `]` is read as display math:
+
+```
+[
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+]
+```
+
+**Already-rendered Unicode** — pasted from a chat window that showed the typeset result:
+
+```
+$$
+x² + √5 ≥ π
+$$
+```
+
+This is only rewritten when the block contains Unicode maths symbols *and* no LaTeX commands at all, so a block that is already valid LaTeX is never touched.
+
+### 4. Formatting syntax
 
 | Syntax | Result |
 |---|---|
-| `*Section Name*` | Color-coded section header |
-| `[LaTeX here]` | Centered display equation |
-| `---` | Horizontal divider line |
-| `**bold text**` | **Bold** inline text |
-| `*italic text*` | *Italic* inline text |
-| `\(...\)` | Inline equation within a text line |
-| `### Heading` | Converted to a section header automatically |
+| `# Heading` … `###### Heading` | Colour-coded section header |
+| `**Label**` or `*Label*` alone on a line | Colour-coded section header |
+| `**bold**`, `*italic*` | Bold, italic |
+| `` `code` `` | Inline monospace |
+| ```` ```…``` ```` | Fenced code block |
+| `- item` / `* item` / `+ item` | Bullet list |
+| `1. item` | Numbered list |
+| `\| a \| b \|` with a `\|---\|---\|` row | Table |
+| `---` | Horizontal divider |
 
-#### Named section colors
+Inline math is allowed inside list items, table cells and headings.
 
-The following section names get a special color accent automatically:
+**Section colours**
 
-| Section name | Color |
+| Section name contains | Colour |
 |---|---|
 | Question | Blue |
-| Given | Teal / Green |
-| Formula / Formulas | Amber |
-| Solution | Purple |
-| Final Answer / Answer | Red |
+| Given, Step, Check | Teal |
+| Formula | Amber |
+| Solution, Working | Purple |
+| Final answer, Answer, Result | Red |
 | Note | Violet |
-| Any other name | Gray |
+| Anything else | Grey |
 
 ### 5. Preview
 
-Click the **Preview ↵** button (top-right of the Input panel), or press **Ctrl+Enter** (`Cmd+Enter` on Mac). The right panel will render your content with typeset equations.
-
-You can also click **Load example** to see a fully worked signal analysis example.
+The preview refreshes automatically about half a second after you stop typing. To force it, press **Ctrl+Enter** or click **Preview**. **Load example** fills the input with a worked Fourier-coefficient problem that exercises most features.
 
 ### 6. Export
 
-Once you are satisfied with the preview, export using one of the three buttons:
+**Download .docx** — a Word document whose equations are native **OMML**. Click any equation in Word and the equation editor opens; the maths is real Word maths, not a picture. Body text is Times New Roman 12 pt; equations use Cambria Math, which is Word's default maths font. Bold and italic from your input are preserved, and tables and lists come through as real Word tables and paragraphs.
 
-#### ⬇ Download .docx
+**Download .html** — a self-contained page with MathJax embedded. Opens in a browser, and Word will import it too.
 
-Generates a proper Word document (`.docx`) with equations stored as native **OMML** (Office Math Markup Language). This means:
-- Equations appear as real Word equations, not images
-- You can click any equation in Word and edit it with the Equation Editor
-- Font is Cambria Math (standard for Word equations)
-- Uses Calibri 12pt body text
-
-The file is named after your document title (e.g., `Signal_Analysis.docx`).
-
-#### ⬇ HTML (Word-ready)
-
-Downloads a self-contained `.html` file with MathJax-rendered equations. You can open this in Word, or share it as a web page.
-
-#### 🖨 Save as PDF
-
-Opens the browser's print dialog. The editor UI is hidden automatically, so only the document content is printed. Use "Save as PDF" in the print dialog.
+**Save as PDF** — opens a new tab, waits for MathJax to finish typesetting, then opens the print dialog. Choose *Save as PDF* there. If nothing happens, your browser blocked the tab — allow pop-ups for this page and try again.
 
 ---
 
-## Input Tips
+## Tips
 
-- You can mix LaTeX, Unicode, and plain text freely in the same document
-- Blank lines between sections are ignored — use `---` for explicit dividers
-- A line like `*Given*` or `*Solution:*` (with or without a trailing colon) is treated as a section header
-- Markdown headings (`## Title`) are automatically converted to section headers
-- Zero-width characters (often invisibly pasted from web pages) are stripped automatically
-- Emoji bullet points (`👉`, `✅`, `💡`, etc.) are converted to plain text lines
+- Blank lines separate paragraphs; use `---` when you want a visible rule
+- A line like `**Given**` or `*Solution:*` becomes a section header, with the trailing colon dropped. A short italic sentence alone on a line will also be read as a header — put it in a paragraph with other text if that is not what you want
+- Prices are safe: `it costs $5 and then $10` is not parsed as maths, because a `$` maths span must have no space just inside either delimiter. Write `\$` if you want to be certain
+- Zero-width and non-breaking characters pasted from web pages are stripped automatically
 
 ---
 
-## Example Input
+## Known limitations
 
-```
-*Question*
-Draw magnitude and phase plots of c_k.
-
----
-
-*Given*
-[
-c_0 = 1, \quad c_{\pm1} = \frac{1}{2} \mp j
-]
+- `\int`, `\sum` and `\lim` decide where their operand ends by scanning to the next relation sign. `\int f(x)\,dx + C` therefore pulls the `+ C` inside the integral — wrap the integrand in braces (`\int {f(x)\,dx} + C`) if that matters
+- The DOCX converter covers a large subset of LaTeX, not all of it. An unrecognised command is written as upright text rather than dropped, so nothing disappears silently, but exotic packages will not survive
+- Word has no blackboard-bold maths style, so `\mathbb{R}` and friends are mapped to the Unicode characters ℝ, ℕ, ℤ, ℚ, ℂ
+- Nested `\left…\right` inside a matrix cell is handled, but a matrix that spans a `\left…\right` boundary is not
+- PDF fidelity depends on the browser's print engine; Chrome gives the most consistent result
+- Very long single-line equations scroll horizontally in the preview rather than wrapping
 
 ---
 
-*Solution*
-[
-|c_0| = 1, \quad \angle c_0 = 0
-]
-
-The magnitude and phase are computed using standard formulas.
-
----
-
-*Final Answer*
-[
-(-1,\ \tfrac{\sqrt{5}}{2}),\ (0,\ 1),\ (1,\ \tfrac{\sqrt{5}}{2})
-]
-```
-
----
-
-## File Structure
-
-The entire tool is a **single `.html` file** with no external dependencies beyond CDN-loaded libraries:
+## Built with
 
 | Library | Purpose |
 |---|---|
-| [MathJax 3.2.2](https://www.mathjax.org/) | Renders LaTeX equations in the preview |
-| [JSZip](https://stuk.github.io/jszip/) | Packages the `.docx` file (loaded on demand) |
+| [MathJax 3.2.2](https://www.mathjax.org/) | Typesets equations in the preview and the HTML/PDF exports |
+| [JSZip 3.10.1](https://stuk.github.io/jszip/) | Packages the `.docx`, loaded on demand |
 
-Both libraries are loaded from `cdnjs.cloudflare.com`. An internet connection is needed for the first load; after that, they may be cached by the browser.
+Both load from `cdnjs.cloudflare.com` and are cached by the browser after the first visit.
 
 ---
 
-## Limitations
+## Privacy
 
-- Complex LaTeX commands that are not supported by MathJax may not render correctly in preview
-- The DOCX exporter converts a subset of LaTeX to OMML; very advanced or non-standard LaTeX may fall back to displaying as plain monospace text in Word
-- Unicode-to-LaTeX conversion is heuristic — ambiguous stacked symbols may not always parse as intended; use explicit `[LaTeX]` blocks for critical equations
-- PDF quality depends on the browser's print engine
+Everything runs in your browser. Nothing you paste is uploaded anywhere. The only network requests are for the two CDN libraries above.
 
 ---
 
 ## License
 
-This tool is provided as-is. It runs entirely in your browser and sends no data anywhere.
+Provided as-is.
