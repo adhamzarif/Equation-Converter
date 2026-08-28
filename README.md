@@ -9,6 +9,8 @@ No installation. No server. Open the file in any modern browser.
 ## Features
 
 - **Live preview** — MathJax renders your equations as you type, with a short debounce
+- **Edit in the preview** — click any block in the rendered document to edit it in place, with the result updating live as you type
+- **Survives a refresh** — your document and title are saved locally, so closing the tab or reloading does not lose your work
 - **Paste-and-go** — accepts a reply exactly as you copied it, without reformatting
 - **Every common math delimiter** — `$$...$$`, `\[...\]`, `$...$`, `\(...\)`, and bare `[` / `]` blocks for replies whose backslashes were stripped by Markdown
 - **LaTeX environments** — `aligned`, `align`, `gather`, `split`, `cases`, `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `array`
@@ -19,7 +21,6 @@ No installation. No server. Open the file in any modern browser.
   - `.docx` — native OMML equations, editable in Word's equation editor, not images
   - `.html` — standalone file with embedded MathJax
   - **PDF** — rendered in a new tab, then the print dialog opens on its own
-- **Keyboard shortcut** — `Ctrl+Enter` (`Cmd+Enter` on Mac) forces a preview
 
 ---
 
@@ -122,9 +123,22 @@ Inline math is allowed inside list items, table cells and headings.
 | Note | Violet |
 | Anything else | Grey |
 
-### 5. Preview
+### 5. Preview and edit
 
-The preview refreshes automatically about half a second after you stop typing. To force it, press **Ctrl+Enter** or click **Preview**. **Load example** fills the input with a worked Fourier-coefficient problem that exercises most features.
+The preview refreshes automatically about half a second after you stop typing. To force it, press **Ctrl+Enter** (`Cmd+Enter` on Mac) or click **Preview**. **Load example** fills the input with a worked Fourier-coefficient problem that exercises most features.
+
+You can edit directly in the preview instead of hunting through the input panel. Hover a block and it highlights with a small **Edit** tag; click it and the block is replaced in place by an editor holding the source that produced it, with the rendered result live above the box as you type.
+
+| Action | How |
+|---|---|
+| Open a block | Click it, or focus it with `Tab` and press `Enter` |
+| Save | **Save**, `Ctrl+Enter`, or click anywhere outside the editor |
+| Cancel | **Cancel** or `Esc` |
+| Remove a block | **Delete block** |
+
+The input panel remains the single source of truth. Saving splices your edit back into those exact source lines and re-parses the whole document, so the two panels can never drift apart, and changes made in the preview appear in the input immediately.
+
+Selecting text does not open the editor, so you can still copy from the preview normally.
 
 ### 6. Export
 
@@ -133,6 +147,16 @@ The preview refreshes automatically about half a second after you stop typing. T
 **Download .html** — a self-contained page with MathJax embedded. Opens in a browser, and Word will import it too.
 
 **Save as PDF** — opens a new tab, waits for MathJax to finish typesetting, then opens the print dialog. Choose *Save as PDF* there. If nothing happens, your browser blocked the tab — allow pop-ups for this page and try again.
+
+---
+
+## Saved work
+
+Your document and title are written to the browser's `localStorage` whenever the preview renders, when you switch away from the tab, and when the tab closes. Reopening the page restores the last document and re-renders it.
+
+- The save is per browser and per site. It does not sync between devices, and it is not a backup — export the file for anything you want to keep.
+- **Clear** wipes the saved copy as well as the editor, so it is a genuine reset rather than something that reappears on reload.
+- If storage is unavailable, as in private browsing, saving quietly does nothing and everything else works as normal.
 
 ---
 
@@ -148,6 +172,7 @@ The preview refreshes automatically about half a second after you stop typing. T
 ## Known limitations
 
 - `\int`, `\sum` and `\lim` decide where their operand ends by scanning to the next relation sign. `\int f(x)\,dx + C` therefore pulls the `+ C` inside the integral — wrap the integrand in braces (`\int {f(x)\,dx} + C`) if that matters
+- If a paragraph has a `$$…$$` block embedded mid-sentence, the surrounding text and the equation share one source range. Clicking either opens the whole paragraph, and deleting removes all of it
 - The DOCX converter covers a large subset of LaTeX, not all of it. An unrecognised command is written as upright text rather than dropped, so nothing disappears silently, but exotic packages will not survive
 - Word has no blackboard-bold maths style, so `\mathbb{R}` and friends are mapped to the Unicode characters ℝ, ℕ, ℤ, ℚ, ℂ
 - Nested `\left…\right` inside a matrix cell is handled, but a matrix that spans a `\left…\right` boundary is not
@@ -169,10 +194,12 @@ Both load from `cdnjs.cloudflare.com` and are cached by the browser after the fi
 
 ## Privacy
 
-Everything runs in your browser. Nothing you paste is uploaded anywhere. The only network requests are for the two CDN libraries above.
+Everything runs in your browser. Nothing you paste is uploaded anywhere. Saved documents stay in your own browser's storage. The only network requests are for the two CDN libraries above.
 
 ---
 
 ## License
 
-Provided as-is.
+MIT — see [LICENSE](LICENSE).
+
+MathJax (Apache-2.0) and JSZip (MIT/GPLv3) are loaded from a CDN and are not redistributed with this project.
