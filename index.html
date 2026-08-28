@@ -63,6 +63,34 @@
   .doc th, .doc td { border: 0.5px solid #bbb; padding: 5px 10px; text-align: left; }
   .doc th { background: #f2f2f0; font-weight: bold; }
   hr.divider { border: none; border-top: 0.5px solid #ccc; margin: 1rem 0; }
+  hr.divider { border: none; border-top: 0.5px solid #ccc; margin: 1rem 0; }
+
+  /* Editable preview blocks */
+  .blk { position: relative; border-radius: 6px; padding: 2px 8px; margin: 0 -8px;
+         cursor: text; transition: background .12s, box-shadow .12s; outline: none; }
+  .blk:hover { background: #f4f6fa; box-shadow: inset 0 0 0 1px rgba(24,95,165,.18); }
+  .blk:focus-visible { background: #f4f6fa; box-shadow: inset 0 0 0 2px var(--blue); }
+  .blk:hover::after { content: 'Edit'; position: absolute; top: 2px; right: 4px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+        color: var(--blue); background: var(--bg); border: 0.5px solid rgba(24,95,165,.3);
+        border-radius: 3px; padding: 1px 5px; pointer-events: none; }
+  .blk > :first-child { margin-top: 0; }
+
+  .blk-editing { border: 1px solid var(--blue); border-radius: 8px; background: #fbfcfe;
+                 padding: 10px 12px; margin: .6rem -8px; }
+  .blk-live { min-height: 20px; margin-bottom: 8px; }
+  .blk-empty { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--red); }
+  .blk-src { width: 100%; min-height: 64px; resize: vertical; border: 0.5px solid var(--border2);
+             border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--text);
+             font-family: 'Consolas', 'SF Mono', 'Courier New', monospace; font-size: 12.5px;
+             line-height: 1.55; outline: none; overflow: hidden; }
+  .blk-src:focus { border-color: var(--blue); }
+  .blk-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .blk-hint { font-family: -apple-system, sans-serif; font-size: 11px; color: var(--text3); margin-left: auto; }
+  .btn-danger { color: var(--red); border-color: rgba(163,45,45,.35); }
+  .btn-danger:hover { background: #fdf3f3; }
+
   .export-bar { padding: 9px 14px; border-top: 0.5px solid var(--border); background: var(--bg2); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: none; }
   .status { font-size: 11px; color: var(--text3); margin-left: auto; }
   @media (max-width: 820px) {
@@ -81,7 +109,7 @@
   </svg>
   <strong>AI answer → document</strong>
   <span>Paste a reply from ChatGPT, Gemini, DeepSeek or Claude. Preview it, then export.</span>
-  <span class="badge">Equations stay editable in Word</span>
+  <span class="badge">Click any block to edit · autosaved</span>
 </header>
 
 <div class="title-row">
@@ -120,7 +148,7 @@ Understood automatically:
       </div>
     </div>
     <div class="preview-pane" id="preview">
-      <div class="preview-empty">Paste a reply and press Preview</div>
+      <div class="preview-empty">Paste a reply on the left.<br>Once it renders, click any block here to edit it.</div>
     </div>
     <div class="export-bar">
       <button class="btn btn-primary" onclick="exportDOCX()">Download .docx</button>
@@ -351,83 +379,98 @@ function parseDocument(raw) {
   const lines = normalizeInput(raw).split('\n');
   const toks = [];
   let para = [];
+  let paraStart = 0;
   let i = 0;
 
-  const flushPara = () => {
+  // Every token records the source lines it came from, so the preview can
+  // edit one block and splice the result back into the input.
+  const push = (tok, a, b) => {
+    tok.a = a; tok.b = b;
+    tok.src = lines.slice(a, b).join('\n');
+    toks.push(tok);
+  };
+
+  const flushPara = (end) => {
     if (!para.length) return;
     const text = para.join('\n');
+    const a = paraStart, b = end;
     para = [];
     // A paragraph may still contain a $$...$$ block inline; split those out.
+    // All the pieces share the paragraph's source range, so editing any of
+    // them opens the whole paragraph.
     const chunks = text.split(/(\$\$[\s\S]*?\$\$)/g);
     for (const ch of chunks) {
       if (!ch.trim()) continue;
       const dm = ch.match(/^\$\$([\s\S]*?)\$\$$/);
-      if (dm) toks.push({ type: 'eq', latex: maybeUnicodeMath(dm[1].trim()) });
-      else toks.push({ type: 'para', inline: parseInline(ch.replace(/\n/g, ' ').trim()) });
+      if (dm) push({ type: 'eq', latex: maybeUnicodeMath(dm[1].trim()) }, a, b);
+      else push({ type: 'para', inline: parseInline(ch.replace(/\n/g, ' ').trim()) }, a, b);
     }
   };
 
   while (i < lines.length) {
     const line = lines[i];
     const t = line.trim();
+    const start = i;
 
     // fenced code
     if (/^```/.test(t)) {
-      flushPara(); i++;
+      flushPara(start); i++;
       const buf = [];
       while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
       i++;
-      toks.push({ type: 'code', text: buf.join('\n') });
+      push({ type: 'code', text: buf.join('\n') }, start, Math.min(i, lines.length));
       continue;
     }
 
-    if (!t) { flushPara(); i++; continue; }
+    if (!t) { flushPara(start); i++; continue; }
 
     // horizontal rule
-    if (/^(-{3,}|\*{3,}|_{3,}|─{3,}|—{3,}|={3,})$/.test(t)) { flushPara(); toks.push({ type: 'hr' }); i++; continue; }
+    if (/^(-{3,}|\*{3,}|_{3,}|─{3,}|—{3,}|={3,})$/.test(t)) {
+      flushPara(start); push({ type: 'hr' }, start, start + 1); i++; continue;
+    }
 
     // ATX heading
     let m = t.match(/^(#{1,6})\s+(.+?)\s*#*$/);
     if (m) {
-      flushPara();
-      toks.push({ type: 'section', text: m[2].replace(/\*\*/g, '').replace(/^\*|\*$/g, '').replace(/:$/, '').trim() });
+      flushPara(start);
+      push({ type: 'section', text: m[2].replace(/\*\*/g, '').replace(/^\*|\*$/g, '').replace(/:$/, '').trim() }, start, start + 1);
       i++; continue;
     }
 
     // display math
     const op = displayOpener(line);
     if (op) {
-      flushPara();
+      flushPara(start);
       const r = collectDisplay(lines, i, op);
-      if (r.latex) toks.push({ type: 'eq', latex: maybeUnicodeMath(r.latex) });
+      if (r.latex) push({ type: 'eq', latex: maybeUnicodeMath(r.latex) }, start, r.next);
       i = r.next; continue;
     }
 
     // whole-line bold/italic label → section
     m = t.match(/^\*\*(.+?)\*\*:?$/) || t.match(/^\*([^*]+?)\*:?$/);
     if (m && m[1].trim().length <= 80 && !/[$\\]/.test(m[1])) {
-      flushPara();
-      toks.push({ type: 'section', text: m[1].replace(/:$/, '').trim() });
+      flushPara(start);
+      push({ type: 'section', text: m[1].replace(/:$/, '').trim() }, start, start + 1);
       i++; continue;
     }
 
     // markdown table
     if (/^\|/.test(t) && i + 1 < lines.length &&
         /^\|?[\s:|-]*-[\s:|-]*\|?$/.test(lines[i + 1].trim()) && lines[i + 1].includes('|')) {
-      flushPara();
+      flushPara(start);
       const splitRow = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => parseInline(c.trim()));
       const head = splitRow(lines[i]);
       i += 2;
       const rows = [];
       while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(splitRow(lines[i])); i++; }
-      toks.push({ type: 'table', head, rows });
+      push({ type: 'table', head, rows }, start, i);
       continue;
     }
 
     // lists
     m = t.match(/^([-*+]|\d+[.)])\s+(.*)$/);
     if (m) {
-      flushPara();
+      flushPara(start);
       const ordered = /\d/.test(m[1]);
       const items = [];
       while (i < lines.length) {
@@ -445,13 +488,14 @@ function parseDocument(raw) {
           items.push(parseInline(body));
         } else break;
       }
-      toks.push({ type: 'list', ordered, items });
+      push({ type: 'list', ordered, items }, start, i);
       continue;
     }
 
+    if (!para.length) paraStart = start;
     para.push(line); i++;
   }
-  flushPara();
+  flushPara(lines.length);
   return toks;
 }
 
@@ -470,49 +514,200 @@ function inlineHTML(parts) {
   }).join('');
 }
 
-function tokensToHTML(toks) {
-  let html = '';
-  for (const tok of toks) {
-    if (tok.type === 'hr') {
-      html += '<hr class="divider">';
-    } else if (tok.type === 'section') {
-      const hex = '#' + sectionHex(tok.text);
-      html += `<div class="sec-label" style="color:${hex};border-left-color:${hex}">${escHTML(tok.text)}</div>`;
-    } else if (tok.type === 'eq') {
-      html += `<div class="eq">\\[${escHTML(tok.latex)}\\]</div>`;
-    } else if (tok.type === 'para') {
-      html += `<p class="para">${inlineHTML(tok.inline)}</p>`;
-    } else if (tok.type === 'list') {
-      const tag = tok.ordered ? 'ol' : 'ul';
-      html += `<${tag}>` + tok.items.map(it => `<li>${inlineHTML(it)}</li>`).join('') + `</${tag}>`;
-    } else if (tok.type === 'code') {
-      html += `<pre>${escHTML(tok.text)}</pre>`;
-    } else if (tok.type === 'table') {
-      html += '<table><thead><tr>' + tok.head.map(c => `<th>${inlineHTML(c)}</th>`).join('') + '</tr></thead><tbody>';
-      html += tok.rows.map(r => '<tr>' + r.map(c => `<td>${inlineHTML(c)}</td>`).join('') + '</tr>').join('');
-      html += '</tbody></table>';
-    }
+function blockHTML(tok) {
+  if (tok.type === 'hr') return '<hr class="divider">';
+  if (tok.type === 'section') {
+    const hex = '#' + sectionHex(tok.text);
+    return `<div class="sec-label" style="color:${hex};border-left-color:${hex}">${escHTML(tok.text)}</div>`;
   }
-  return html;
+  if (tok.type === 'eq') return `<div class="eq">\\[${escHTML(tok.latex)}\\]</div>`;
+  if (tok.type === 'para') return `<p class="para">${inlineHTML(tok.inline)}</p>`;
+  if (tok.type === 'list') {
+    const tag = tok.ordered ? 'ol' : 'ul';
+    return `<${tag}>` + tok.items.map(it => `<li>${inlineHTML(it)}</li>`).join('') + `</${tag}>`;
+  }
+  if (tok.type === 'code') return `<pre>${escHTML(tok.text)}</pre>`;
+  if (tok.type === 'table') {
+    return '<table><thead><tr>' + tok.head.map(c => `<th>${inlineHTML(c)}</th>`).join('') + '</tr></thead><tbody>'
+         + tok.rows.map(r => '<tr>' + r.map(c => `<td>${inlineHTML(c)}</td>`).join('') + '</tr>').join('')
+         + '</tbody></table>';
+  }
+  return '';
+}
+
+// editable = wrap each block so the preview can be clicked into.
+function tokensToHTML(toks, editable) {
+  return toks.map((tok, idx) => editable
+    ? `<div class="blk" data-blk="${idx}" tabindex="0" role="button" aria-label="Edit this block">${blockHTML(tok)}</div>`
+    : blockHTML(tok)).join('');
+}
+
+/* ============================================================
+   2b. Editable preview
+   ============================================================
+   The input textarea is the single source of truth. Clicking a block in the
+   preview opens the source lines that produced it; saving splices the edit
+   back into the textarea and re-renders everything.
+============================================================ */
+
+let TOKENS = [];
+let editingIndex = null;
+
+function inputEl() { return document.getElementById('input'); }
+function titleEl() { return document.getElementById('docTitle'); }
+
+async function typeset(node) {
+  if (window.MathJax && MathJax.typesetPromise) {
+    try { await MathJax.typesetPromise([node]); } catch (e) { /* MathJax flags bad math itself */ }
+  }
 }
 
 async function renderPreview() {
-  const raw = document.getElementById('input').value;
+  if (editingIndex !== null) return;      // don't yank the editor out from under the caret
+  const raw = inputEl().value;
   const preview = document.getElementById('preview');
   if (!raw.trim()) {
-    preview.innerHTML = '<div class="preview-empty">Paste a reply and press Preview</div>';
-    setStatus(''); return;
+    TOKENS = [];
+    preview.innerHTML = '<div class="preview-empty">Paste a reply on the left.<br>Once it renders, click any block here to edit it.</div>';
+    setStatus(''); saveSession(); return;
   }
-  const toks = parseDocument(raw);
-  const title = document.getElementById('docTitle').value.trim();
+  TOKENS = parseDocument(raw);
+  const title = titleEl().value.trim();
   const titleHTML = title ? `<div class="doc-title">${escHTML(title)}</div>` : '';
-  preview.innerHTML = `<div class="doc">${titleHTML}${tokensToHTML(toks)}</div>`;
-  if (window.MathJax && MathJax.typesetPromise) {
-    try { await MathJax.typesetPromise([preview]); } catch (e) { /* MathJax marks bad math in red */ }
-  }
-  const eqCount = toks.filter(t => t.type === 'eq').length;
-  setStatus(`Rendered — ${toks.length} blocks, ${eqCount} display equations`);
+  preview.innerHTML = `<div class="doc">${titleHTML}${tokensToHTML(TOKENS, true)}</div>`;
+  await typeset(preview);
+  const eqCount = TOKENS.filter(t => t.type === 'eq').length;
+  setStatus(`${TOKENS.length} blocks, ${eqCount} equations — click any block to edit it`);
+  saveSession();
 }
+
+// Replace source lines [a, b) with newText and re-render.
+function spliceSource(a, b, newText) {
+  const lines = normalizeInput(inputEl().value).split('\n');
+  const replacement = newText.replace(/\s+$/, '');
+  const middle = replacement === '' ? [] : replacement.split('\n');
+  inputEl().value = lines.slice(0, a).concat(middle, lines.slice(b)).join('\n');
+}
+
+function openBlockEditor(idx) {
+  if (editingIndex !== null) closeBlockEditor(false);
+  const tok = TOKENS[idx];
+  if (!tok) return;
+  const node = document.querySelector(`[data-blk="${idx}"]`);
+  if (!node) return;
+
+  editingIndex = idx;
+  const wrap = document.createElement('div');
+  wrap.className = 'blk-editing';
+  wrap.innerHTML =
+    '<div class="blk-live"></div>' +
+    '<textarea class="blk-src" spellcheck="false"></textarea>' +
+    '<div class="blk-bar">' +
+      '<button class="btn btn-primary" data-act="save">Save</button>' +
+      '<button class="btn" data-act="cancel">Cancel</button>' +
+      '<button class="btn btn-danger" data-act="delete">Delete block</button>' +
+      '<span class="blk-hint">Ctrl+Enter saves · Esc cancels</span>' +
+    '</div>';
+  node.replaceWith(wrap);
+
+  const ta = wrap.querySelector('.blk-src');
+  const live = wrap.querySelector('.blk-live');
+  ta.value = tok.src;
+
+  const autoSize = () => { ta.style.height = 'auto'; ta.style.height = Math.max(64, ta.scrollHeight + 2) + 'px'; };
+  const refresh = async () => {
+    live.innerHTML = tokensToHTML(parseDocument(ta.value), false) || '<span class="blk-empty">empty — saving removes this block</span>';
+    await typeset(live);
+  };
+
+  let t;
+  ta.addEventListener('input', () => {
+    autoSize();
+    clearTimeout(t);
+    t = setTimeout(refresh, 300);
+  });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); closeBlockEditor(false); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeBlockEditor(true); }
+  });
+  wrap.addEventListener('click', e => {
+    const act = e.target.getAttribute && e.target.getAttribute('data-act');
+    if (act === 'save') closeBlockEditor(true);
+    if (act === 'cancel') closeBlockEditor(false);
+    if (act === 'delete') { ta.value = ''; closeBlockEditor(true); }
+  });
+
+  autoSize();
+  refresh();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  wrap.scrollIntoView({ block: 'nearest' });
+}
+
+function closeBlockEditor(commit) {
+  if (editingIndex === null) return;
+  const idx = editingIndex;
+  const ta = document.querySelector('.blk-src');
+  const tok = TOKENS[idx];
+  editingIndex = null;
+  if (commit && ta && tok) {
+    spliceSource(tok.a, tok.b, ta.value);
+    saveSession();
+  }
+  renderPreview();
+}
+
+document.getElementById('preview').addEventListener('click', e => {
+  if (editingIndex !== null) {
+    // Clicking away from an open editor saves it, the way a spreadsheet cell does.
+    if (!e.target.closest('.blk-editing')) closeBlockEditor(true);
+    return;
+  }
+  if (e.target.closest('a')) return;
+  // Let people select and copy without the editor jumping in.
+  const sel = window.getSelection && window.getSelection();
+  if (sel && !sel.isCollapsed && String(sel).trim()) return;
+  const blk = e.target.closest('.blk');
+  if (blk) openBlockEditor(Number(blk.getAttribute('data-blk')));
+});
+document.getElementById('preview').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const blk = e.target.closest && e.target.closest('.blk');
+  if (blk && editingIndex === null) { e.preventDefault(); openBlockEditor(Number(blk.getAttribute('data-blk'))); }
+});
+
+/* ============================================================
+   2c. Session persistence
+   ============================================================ */
+
+const STORE_KEY = 'equation-converter/session/v1';
+
+function saveSession() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      src: inputEl().value,
+      title: titleEl().value,
+      at: Date.now()
+    }));
+  } catch (e) { /* private mode or storage disabled — the tool still works */ }
+}
+
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || typeof data.src !== 'string' || !data.src.trim()) return false;
+    inputEl().value = data.src;
+    if (typeof data.title === 'string') titleEl().value = data.title;
+    return true;
+  } catch (e) { return false; }
+}
+
+function forgetSession() {
+  try { localStorage.removeItem(STORE_KEY); } catch (e) { /* nothing to do */ }
+}
+
 
 /* ============================================================
    3. LaTeX → OMML (native Word math)
@@ -1336,24 +1531,42 @@ function loadExample() {
 }
 
 function clearAll() {
-  document.getElementById('input').value = '';
-  document.getElementById('preview').innerHTML = '<div class="preview-empty">Paste a reply and press Preview</div>';
-  setStatus('');
+  editingIndex = null;
+  TOKENS = [];
+  inputEl().value = '';
+  document.getElementById('preview').innerHTML = '<div class="preview-empty">Paste a reply on the left.<br>Once it renders, click any block here to edit it.</div>';
+  forgetSession();
+  setStatus('Cleared');
 }
 
 document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); renderPreview(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && editingIndex === null) {
+    e.preventDefault(); renderPreview();
+  }
 });
 
 let debounce;
-document.getElementById('input').addEventListener('input', () => {
+const scheduleRender = () => {
   clearTimeout(debounce);
-  debounce = setTimeout(renderPreview, 600);
-});
-document.getElementById('docTitle').addEventListener('input', () => {
-  clearTimeout(debounce);
-  debounce = setTimeout(renderPreview, 600);
-});
+  debounce = setTimeout(renderPreview, 500);
+};
+inputEl().addEventListener('input', scheduleRender);
+titleEl().addEventListener('input', scheduleRender);
+
+// Last chance to persist if the tab closes between debounces.
+window.addEventListener('beforeunload', saveSession);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveSession(); });
+
+// Restore whatever was on screen before the last refresh.
+if (restoreSession()) {
+  renderPreview().then(() => setStatus(setStatusRestored()));
+} else {
+  setStatus('Paste a reply, or load the example');
+}
+function setStatusRestored() {
+  const n = TOKENS.length;
+  return n ? `Restored your last document — ${n} blocks` : 'Restored your last document';
+}
 </script>
 </body>
 </html>

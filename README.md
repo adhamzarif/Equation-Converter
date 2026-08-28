@@ -175,7 +175,4 @@ Everything runs in your browser. Nothing you paste is uploaded anywhere. The onl
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-MathJax (Apache-2.0) and JSZip (MIT/GPLv3) are loaded from a CDN and
-are not redistributed with this project.
+Provided as-is.
